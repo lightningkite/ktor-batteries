@@ -1,9 +1,10 @@
 package com.lightningkite.lightningserver.cache
 
+import com.lightningkite.lightningserver.serialization.Serialization
 import kotlinx.serialization.KSerializer
 import java.util.concurrent.ConcurrentHashMap
 
-object LocalCache: CacheInterface {
+class LocalCache(override val serialization: Serialization): CacheInterface {
     data class Entry(val value: Any?, val expires: Long? = null)
     val entries = ConcurrentHashMap<String, Entry>()
 

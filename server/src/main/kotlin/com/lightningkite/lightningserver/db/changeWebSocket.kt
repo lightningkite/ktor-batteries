@@ -21,8 +21,8 @@ inline fun <reified USER, reified T : HasId<ID>, reified ID : Comparable<ID>> Se
     noinline collection: suspend FieldCollection<T>.(USER) -> FieldCollection<T>
 ): ApiWebsocket<USER, Query<T>, ListChange<T>> = restApiWebsocket(
     AuthInfo(),
-    Serialization.module.serializer(),
-    Serialization.module.serializer(),
+    serializer(),
+    serializer(),
     baseCollection,
     collection
 )

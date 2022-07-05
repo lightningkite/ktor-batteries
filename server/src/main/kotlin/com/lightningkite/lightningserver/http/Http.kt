@@ -2,20 +2,6 @@ package com.lightningkite.lightningserver.http
 
 import com.lightningkite.lightningserver.exceptions.HttpStatusException
 import com.lightningkite.lightningserver.serialization.toHttpContent
-import com.lightningkite.lightningserver.settings.GeneralServerSettings
-
-object Http {
-    val routes = mutableMapOf<HttpRoute, suspend (HttpRequest) -> HttpResponse>()
-    var exception: suspend (HttpRequest, Exception) -> HttpResponse =
-        { request, exception ->
-
-            if (exception is HttpStatusException) {
-                exception.toResponse(request)
-            } else {
-                HttpResponse(status = HttpStatus.InternalServerError)
-            }
-        }
-}
 
 suspend fun HttpRoute.test(
     parts: Map<String, String> = mapOf(),

@@ -4,6 +4,7 @@ import com.lightningkite.lightningserver.jsonschema.encodeToSchema
 import com.lightningkite.lightningserver.jsonschema.internal.createJsonSchema
 import com.lightningkite.lightningserver.serialization.Serialization
 import com.lightningkite.lightningdb.ServerFile
+import com.lightningkite.lightningserver.ServerRunner
 import io.ktor.util.*
 import kotlinx.html.*
 import kotlinx.serialization.KSerializer
@@ -17,6 +18,7 @@ import kotlin.reflect.KType
 import kotlin.reflect.typeOf
 
 
+context(ServerRunner)
 fun HEAD.includeFormScript() {
     script { src = "https://cdn.jsdelivr.net/npm/@json-editor/json-editor@latest/dist/jsoneditor.min.js" }
 
@@ -44,13 +46,15 @@ fun HEAD.includeFormScript() {
     }
 }
 
+context(ServerRunner)
 @OptIn(InternalAPI::class)
 inline fun <reified T> FORM.insideHtmlForm(
     title: String,
     jsEditorName: String,
     defaultValue: T? = null,
     collapsed: Boolean = false,
-): Unit = insideHtmlForm(title, jsEditorName, Serialization.module.serializer(), defaultValue, collapsed)
+): Unit = insideHtmlForm(title, jsEditorName, serializer(), defaultValue, collapsed)
+context(ServerRunner)
 fun <T> FORM.insideHtmlForm(
     title: String,
     jsEditorName: String,
@@ -103,6 +107,7 @@ fun <T> FORM.insideHtmlForm(
     }
 }
 
+context(ServerRunner)
 internal fun SerialDescriptor.fileFieldNames(visited: MutableSet<SerialDescriptor> = mutableSetOf()): List<String> {
     if(!visited.add(this)) return listOf()
     return (0 until elementsCount)
@@ -110,9 +115,9 @@ internal fun SerialDescriptor.fileFieldNames(visited: MutableSet<SerialDescripto
             val name = getElementName(it)
             var descriptor = getElementDescriptor(it)
             if (descriptor.kind == SerialKind.CONTEXTUAL) {
-                descriptor = Serialization.module.getContextualDescriptor(descriptor)!!
+                descriptor = serialization.module.getContextualDescriptor(descriptor)!!
             }
-            descriptor.fileFieldNames(visited).map { "$name.$it" } + if (descriptor == Serialization.module.getContextual(
+            descriptor.fileFieldNames(visited).map { "$name.$it" } + if (descriptor == serialization.module.getContextual(
                     ServerFile::class
                 )?.descriptor
             ) listOf(
@@ -121,13 +126,15 @@ internal fun SerialDescriptor.fileFieldNames(visited: MutableSet<SerialDescripto
         }
 }
 
+context(ServerRunner)
 inline fun <reified T> FlowContent.jsForm(
     title: String,
     jsEditorName: String,
     defaultValue: T? = null,
     collapsed: Boolean = false,
-) = jsForm(title, jsEditorName, Serialization.module.serializer<T>(), defaultValue, collapsed)
+) = jsForm(title, jsEditorName, serializer<T>(), defaultValue, collapsed)
 
+context(ServerRunner)
 fun <T> FlowContent.jsForm(
     title: String,
     jsEditorName: String,
@@ -144,13 +151,13 @@ fun <T> FlowContent.jsForm(
                     disable_properties: true,
                     form_name_root: "$title",
                     collapsed: $collapsed,
-                    schema: ${Serialization.json.encodeToSchema(serializer)},
+                    schema: ${serialization.json.encodeToSchema(serializer)},
                     max_depth: 5
                 });
                 ${
                 if (defaultValue != null) "${jsEditorName}.on('ready', () => ${jsEditorName}.setValue(${
                     Json(
-                        Serialization.json
+                        serialization.json
                     ) { encodeDefaults = true }.encodeToString(serializer, defaultValue)
                 }))" else ""
             }
@@ -159,13 +166,15 @@ fun <T> FlowContent.jsForm(
     }
 }
 
+context(ServerRunner)
 inline fun <reified T> FlowContent.display(
     title: String,
     jsEditorName: String,
     defaultValue: T? = null,
     collapsed: Boolean = false,
-) = displayUntyped(title, jsEditorName, Serialization.module.serializer<T>(), defaultValue, collapsed)
+) = displayUntyped(title, jsEditorName, serializer<T>(), defaultValue, collapsed)
 
+context(ServerRunner)
 fun <T> FlowContent.displayUntyped(
     title: String,
     jsEditorName: String,
@@ -182,13 +191,13 @@ fun <T> FlowContent.displayUntyped(
                     disable_properties: true,
                     form_name_root: "$title",
                     collapsed: $collapsed,
-                    schema: ${Serialization.json.encodeToSchema(serializer)}
+                    schema: ${serialization.json.encodeToSchema(serializer)}
                 });
                 ${jsEditorName}.disable()
                 ${
                 if (defaultValue != null) "${jsEditorName}.setValue(${
                     Json(
-                        Serialization.json
+                        serialization.json
                     ) { encodeDefaults = true }.encodeToString(
                         serializer, defaultValue
                     )

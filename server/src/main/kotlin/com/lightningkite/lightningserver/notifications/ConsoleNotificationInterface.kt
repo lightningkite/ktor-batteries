@@ -14,7 +14,7 @@ object ConsoleNotificationInterface : NotificationInterface {
         critical: Boolean,
         androidChannel: String?,
     ) {
-        if (targets.isEmpty() || (System.getenv("test") == "true" && !NotificationSettings.instance.sendNotificationsDuringTests)) return
+        if (targets.isEmpty() || (System.getenv("test") == "true")) return
         println(buildString {
             appendLine("-----NOTIFICATION-----")
             appendLine("To: ")

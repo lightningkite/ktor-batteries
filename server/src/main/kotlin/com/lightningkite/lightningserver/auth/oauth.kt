@@ -1,20 +1,24 @@
 package com.lightningkite.lightningserver.auth
 
+import com.lightningkite.lightningserver.Server
+import com.lightningkite.lightningserver.ServerBuilder
+import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.client
 import com.lightningkite.lightningserver.core.LightningServerDsl
 import com.lightningkite.lightningserver.core.ServerPath
 import com.lightningkite.lightningserver.exceptions.BadRequestException
+import com.lightningkite.lightningserver.exceptions.NotFoundException
 import com.lightningkite.lightningserver.http.HttpResponse
 import com.lightningkite.lightningserver.http.HttpRoute
 import com.lightningkite.lightningserver.http.get
 import com.lightningkite.lightningserver.http.handler
-import com.lightningkite.lightningserver.settings.GeneralServerSettings
 import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.client.request.forms.*
 import io.ktor.http.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.nullable
 import java.util.*
 
 
@@ -24,6 +28,12 @@ data class OauthResponse(
     val scope: String,
     val token_type: String = "Bearer",
     val id_token: String? = null
+)
+
+@Serializable
+data class OauthProviderCredentials(
+    val id: String,
+    val secret: String
 )
 
 
@@ -41,6 +51,7 @@ data class OauthResponse(
  * @param secretTransform An optional lambda that allows any custom transformations on the client_secret before being used.
  * @param remoteTokenToUserId A lambda that will return the userId given the token from the third party.
  */
+context(ServerBuilder)
 @LightningServerDsl
 inline fun ServerPath.oauth(
     landingRoute: HttpRoute,
@@ -50,38 +61,40 @@ inline fun ServerPath.oauth(
     getTokenUrl: String,
     scope: String,
     additionalParams: String = "",
-    crossinline secretTransform: (String) -> String = { it },
-    crossinline remoteTokenToUserId: suspend (OauthResponse)->String
+    crossinline secretTransform: ServerRunner.(String) -> String = { it },
+    crossinline remoteTokenToUserId: suspend ServerRunner.(OauthResponse)->String
 ) {
+    val settings = require(Server.Setting("oauth-${codeName}", OauthProviderCredentials.serializer().nullable) { null })
+    val tokenSigner = require(JwtSigner.default)
+
     val landing = landingRoute
-    val settings = AuthSettings.instance.oauth[codeName] ?: return
     val callbackRoute = get("callback")
-    get("login").handler { request ->
+    get("login").handler = handler@{ request ->
         HttpResponse.redirectToGet("""
                     $authUrl?
                     response_type=code&
                     scope=$scope&
-                    redirect_uri=${GeneralServerSettings.instance.publicUrl + callbackRoute.toString()}&
-                    client_id=${settings.id}
+                    redirect_uri=${publicUrl + callbackRoute.toString()}&
+                    client_id=${settings()?.id ?: throw NotFoundException("OAuth for $niceName is not configured on this server.")}
                     $additionalParams
                 """.trimIndent().replace("\n", ""))
     }
-    callbackRoute.handler { request ->
+    callbackRoute.handler = { request ->
         request.queryParameter("error")?.let {
             throw BadRequestException("Got error code '${it}' from $niceName.")
         } ?: request.queryParameter("code")?.let { code ->
             val response: OauthResponse = client.post(getTokenUrl) {
                 formData {
                     parameter("code", code)
-                    parameter("client_id", settings.id)
-                    parameter("client_secret", secretTransform(settings.secret))
-                    parameter("redirect_uri", GeneralServerSettings.instance.publicUrl + callbackRoute.toString())
+                    parameter("client_id", settings()?.id ?: throw NotFoundException("OAuth for $niceName is not configured on this server."))
+                    parameter("client_secret", secretTransform(settings()?.id ?: throw NotFoundException("OAuth for $niceName is not configured on this server.")))
+                    parameter("redirect_uri", publicUrl + callbackRoute.toString())
                     parameter("grant_type", "authorization_code")
                 }
                 accept(ContentType.Application.Json)
             }.body()
 
-            HttpResponse.redirectToGet(GeneralServerSettings.instance.publicUrl + landing.toString() + "?jwt=${AuthSettings.instance.token(remoteTokenToUserId(response))}")
+            HttpResponse.redirectToGet(publicUrl + landing.toString() + "?jwt=${tokenSigner().token(remoteTokenToUserId(response))}")
         } ?: throw IllegalStateException()
     }
 }

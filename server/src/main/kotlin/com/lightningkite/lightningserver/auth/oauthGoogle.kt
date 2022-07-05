@@ -1,10 +1,11 @@
 package com.lightningkite.lightningserver.auth
 
+import com.lightningkite.lightningserver.ServerBuilder
+import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.client
 import com.lightningkite.lightningserver.core.LightningServerDsl
 import com.lightningkite.lightningserver.core.ServerPath
 import com.lightningkite.lightningserver.http.HttpRoute
-import com.lightningkite.lightningserver.settings.GeneralServerSettings
 import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.client.request.forms.*
@@ -22,10 +23,11 @@ import java.util.*
  * @param defaultLanding The final page to send the user after authentication.
  * @param emailToId A lambda that returns the users ID given an email.
  */
-@LightningServerDsl
+context(ServerBuilder)
+        @LightningServerDsl
 fun ServerPath.oauthGoogle(
     landingRoute: HttpRoute,
-    emailToId: suspend (String) -> String
+    emailToId: suspend ServerRunner.(String) -> String
 ) = oauth(
     landingRoute = landingRoute,
     niceName = "Google",
@@ -40,7 +42,7 @@ fun ServerPath.oauthGoogle(
             append("Authorization", "${it.token_type} ${it.access_token}")
         }
     }.body()
-    if(!response2.verified_email) throw BadRequestException("Google has not verified the email '${response2.email}'.")
+    if (!response2.verified_email) throw BadRequestException("Google has not verified the email '${response2.email}'.")
     emailToId(response2.email)
 }
 

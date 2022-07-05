@@ -5,6 +5,7 @@ import com.github.jershell.kbson.KBson
 import com.lightningkite.lightningserver.SetOnce
 import com.lightningkite.lightningdb.ClientModule
 import com.lightningkite.lightningdb.ServerFile
+import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.core.ContentType
 import com.lightningkite.lightningserver.exceptions.BadRequestException
 import com.lightningkite.lightningserver.files.*
@@ -14,7 +15,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.*
 import kotlinx.serialization.cbor.Cbor
+import kotlinx.serialization.cbor.CborBuilder
 import kotlinx.serialization.csv.Csv
+import kotlinx.serialization.csv.config.CsvBuilder
 import kotlinx.serialization.descriptors.SerialKind
 import kotlinx.serialization.descriptors.getContextualDescriptor
 import kotlinx.serialization.encoding.*
@@ -29,40 +32,38 @@ import kotlin.reflect.*
 /**
  * A place to hold all the support Serialization types.
  */
-object Serialization {
-    var module: SerializersModule by SetOnce {
-        ClientModule.overwriteWith(serializersModuleOf(ExternalServerFileSerializer))
+data class Serialization(
+    val module: SerializersModule = ClientModule, // ClientModule.overwriteWith(serializersModuleOf(ExternalServerFileSerializer(runner)))
+    val jsonConfig: JsonBuilder.()->Unit = {
+        ignoreUnknownKeys = true
+    },
+    val csvConfig: CsvBuilder.()->Unit = {
+        hasHeaderRecord = true
+        ignoreUnknownColumns = true
+    },
+    val bsonConfig: Configuration = Configuration(),
+    val cborConfig: CborBuilder.()->Unit = {
+        ignoreUnknownKeys = true
+        serializersModule = module
     }
-    var json: Json by SetOnce {
-        Json {
-            ignoreUnknownKeys = true
-            serializersModule = module
-        }
+) {
+    val json: Json = Json() {
+        jsonConfig()
+        serializersModule = module
     }
-    var csv: Csv by SetOnce {
-        Csv {
-            hasHeaderRecord = true
-            ignoreUnknownColumns = true
-            serializersModule = module
-        }
+    val csv: Csv = Csv {
+        csvConfig()
+        serializersModule = module
     }
-    var bson: KBson by SetOnce {
-        KBson(module, Configuration())
+    val bson: KBson = KBson(module, bsonConfig)
+    val cbor: Cbor = Cbor {
+        cborConfig()
+        serializersModule = module
     }
-    var xml: XML by SetOnce {
-        XML(module) {
-        }
-    }
-    var cbor: Cbor by SetOnce {
-        Cbor {
-            ignoreUnknownKeys = true
-            serializersModule = module
-        }
-    }
-    var javaData: JavaData by SetOnce {
-        JavaData(module)
-    }
-    var properties: Properties by SetOnce {
-        Properties(module)
-    }
+    val javaData: JavaData = JavaData(module)
+    val properties: Properties = Properties(module)
+}
+
+interface HasSerialization {
+    val serialization: Serialization
 }

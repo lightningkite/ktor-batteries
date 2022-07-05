@@ -1,16 +1,15 @@
 package com.lightningkite.lightningserver.typed
 
+import com.lightningkite.lightningserver.Server
 import com.lightningkite.lightningserver.core.ServerPath
-import com.lightningkite.lightningserver.http.Http
 import com.lightningkite.lightningserver.http.HttpMethod
-import com.lightningkite.lightningserver.websocket.WebSockets
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.serializer
 import java.io.File
 import kotlin.reflect.KClass
 import kotlin.reflect.KType
 
-fun Documentable.Companion.kotlinApi(packageName: String): String = CodeEmitter(packageName).apply {
+fun Server.kotlinApi(packageName: String): String = CodeEmitter(packageName).apply {
     imports.add("io.reactivex.rxjava3.core.Single")
     imports.add("io.reactivex.rxjava3.core.Observable")
     imports.add("com.lightningkite.rx.okhttp.*")
@@ -40,7 +39,7 @@ fun Documentable.Companion.kotlinApi(packageName: String): String = CodeEmitter(
     appendLine()
 }.toString()
 
-fun Documentable.Companion.kotlinSessions(packageName: String): String = CodeEmitter(packageName).apply {
+fun Server.kotlinSessions(packageName: String): String = CodeEmitter(packageName).apply {
     imports.add("io.reactivex.rxjava3.core.Single")
     imports.add("io.reactivex.rxjava3.core.Observable")
     imports.add("com.lightningkite.rx.okhttp.*")
@@ -80,7 +79,7 @@ fun Documentable.Companion.kotlinSessions(packageName: String): String = CodeEmi
     }
 }.toString()
 
-fun Documentable.Companion.kotlinLiveApi(packageName: String): String = CodeEmitter(packageName).apply {
+fun Server.kotlinLiveApi(packageName: String): String = CodeEmitter(packageName).apply {
     imports.add("io.reactivex.rxjava3.core.Single")
     imports.add("io.reactivex.rxjava3.core.Observable")
     imports.add("com.lightningkite.rx.android.resources.ImageReference")
@@ -151,7 +150,7 @@ fun Documentable.Companion.kotlinLiveApi(packageName: String): String = CodeEmit
     appendLine()
 }.toString()
 
-private val Documentable.Companion.safeDocumentables get() = (Http.routes.values.filterIsInstance<ApiEndpoint<*, *, *>>().filter { it.route.method != HttpMethod.GET || it.inputType == Unit.serializer() } + WebSockets.handlers.values.filterIsInstance<ApiWebsocket<*, *, *>>())
+private val Server.safeDocumentables get() = (endpoints.values.filterIsInstance<ApiEndpoint<*, *, *>>().filter { it.route.method != HttpMethod.GET || it.inputType == Unit.serializer() } + websockets.values.filterIsInstance<ApiWebsocket<*, *, *>>())
     .distinctBy { it.docGroup.toString() + "/" + it.summary }
 
 private class CodeEmitter(val packageName: String, val body: StringBuilder = StringBuilder()): Appendable by body {

@@ -59,8 +59,8 @@ inline fun <reified USER, reified T : HasId<ID>, reified ID : Comparable<ID>> Se
     noinline getCollection: suspend (principal: USER) -> FieldCollection<T>
 ): Unit = adminPages(
     authInfo = AuthInfo(),
-    serializer = Serialization.module.serializer(),
-    idSerializer = Serialization.module.serializer(),
+    serializer = serializer(),
+    idSerializer = serializer(),
     defaultItem = defaultItem,
     getCollection = getCollection
 )

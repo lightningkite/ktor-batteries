@@ -56,10 +56,11 @@ fun S3FileObject.uploadUrl(seconds: Int): String {
 /**
  * A patch to prevent generating a signed url from making external calls which will be slow.
  */
-fun S3FileObject.unstupidSignUrl(seconds: Int): String {
+fun S3FileObject.unstupidSignUrl(seconds: Int, start: Date = Date()): String {
     return object : S3FileObject(this.name, this.fileSystem as S3FileSystem) {
-        fun unstupidSignUrl(expireInSeconds: Int): String {
+        fun unstupidSignUrl(expireInSeconds: Int, start: Date = Date()): String {
             val cal = Calendar.getInstance()
+            cal.time = start
 
             cal.add(Calendar.SECOND, expireInSeconds)
 
@@ -93,5 +94,5 @@ fun S3FileObject.unstupidSignUrl(seconds: Int): String {
                 throw FileSystemException(e)
             }
         }
-    }.unstupidSignUrl(seconds)
+    }.unstupidSignUrl(seconds, start)
 }

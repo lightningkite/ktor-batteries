@@ -1,5 +1,6 @@
 package com.lightningkite.lightningserver.http
 
+import com.lightningkite.lightningserver.ServerBuilder
 import com.lightningkite.lightningserver.core.LightningServerDsl
 import com.lightningkite.lightningserver.core.ServerPath
 
@@ -31,8 +32,9 @@ fun ServerPath.delete(path: String): HttpRoute = HttpRoute(this.path(path), Http
 @LightningServerDsl
 fun ServerPath.head(path: String): HttpRoute = HttpRoute(this.path(path), HttpMethod.HEAD)
 
+context(ServerBuilder)
 @LightningServerDsl
-fun HttpRoute.handler(handler: suspend (HttpRequest) -> HttpResponse): HttpRoute {
-    Http.routes[this] = handler
+fun HttpRoute.handler(handler: HttpHandler): HttpRoute {
+    this.handler = handler
     return this
 }

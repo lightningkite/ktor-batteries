@@ -1,9 +1,10 @@
 package com.lightningkite.lightningserver.serialization
 
 import com.lightningkite.lightningdb.ServerFile
+import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.core.ContentType
 import com.lightningkite.lightningserver.exceptions.BadRequestException
-import com.lightningkite.lightningserver.files.FilesSettings
+import com.lightningkite.lightningserver.files.files
 import com.lightningkite.lightningserver.files.publicUrl
 import com.lightningkite.lightningserver.files.resolveFileWithUniqueName
 import com.lightningkite.lightningserver.files.upload
@@ -24,67 +25,71 @@ import kotlinx.serialization.serializer
 
 private val multipartJsonKey = "__json"
 
-inline fun <reified T> HttpRequest.queryParameters(): T = queryParameters(Serialization.properties.serializersModule.serializer())
+context(HasSerialization)
+inline fun <reified T> HttpRequest.queryParameters(): T = queryParameters(serialization.properties.serializersModule.serializer())
+context(HasSerialization)
 fun <T> HttpRequest.queryParameters(serializer: KSerializer<T>): T {
     @Suppress("UNCHECKED_CAST")
     if(serializer == Unit.serializer()) return Unit as T
-    return Serialization.properties.decodeFromStringMap<T>(
+    return serialization.properties.decodeFromStringMap<T>(
         serializer,
         queryParameters.groupBy { it.first }.mapValues { it.value.joinToString(",") }
     )
 }
 
-suspend inline fun <reified T> HttpContent.parse(): T = parse(Serialization.module.serializer())
+context(ServerRunner)
+suspend inline fun <reified T> HttpContent.parse(): T = parse(serializer())
+context(ServerRunner)
 suspend fun <T> HttpContent.parse(serializer: KSerializer<T>): T {
     try {
         @Suppress("UNCHECKED_CAST")
         if (serializer == Unit.serializer()) return Unit as T
         return when (this.type) {
             ContentType.Application.Json -> when (val body = this) {
-                is HttpContent.Text -> Serialization.json.decodeFromString(serializer, body.string)
-                is HttpContent.Binary -> Serialization.json.decodeFromString(
+                is HttpContent.Text -> serialization.json.decodeFromString(serializer, body.string)
+                is HttpContent.Binary -> serialization.json.decodeFromString(
                     serializer,
                     body.bytes.toString(Charsets.UTF_8)
                 )
                 is HttpContent.Multipart -> throw BadRequestException("Expected JSON, but got a multipart body.")
                 else -> withContext(Dispatchers.IO) {
-                    Serialization.json.decodeFromStream(
+                    serialization.json.decodeFromStream(
                         serializer,
                         body.stream()
                     )
                 }
             }
             ContentType.Text.CSV -> when (val body = this) {
-                is HttpContent.Text -> Serialization.csv.decodeFromString(serializer, body.string)
-                is HttpContent.Binary -> Serialization.csv.decodeFromString(
+                is HttpContent.Text -> serialization.csv.decodeFromString(serializer, body.string)
+                is HttpContent.Binary -> serialization.csv.decodeFromString(
                     serializer,
                     body.bytes.toString(Charsets.UTF_8)
                 )
                 is HttpContent.Multipart -> throw BadRequestException("Expected JSON, but got a multipart body.")
                 else -> withContext(Dispatchers.IO) {
-                    Serialization.csv.decodeFromString(
+                    serialization.csv.decodeFromString(
                         serializer,
                         stream().bufferedReader().readText()
                     )
                 }
             }
             ContentType.Application.Bson -> when (val body = this) {
-                is HttpContent.Text -> Serialization.bson.load(serializer, body.string.toByteArray())
-                is HttpContent.Binary -> Serialization.bson.load(serializer, body.bytes)
+                is HttpContent.Text -> serialization.bson.load(serializer, body.string.toByteArray())
+                is HttpContent.Binary -> serialization.bson.load(serializer, body.bytes)
                 is HttpContent.Multipart -> throw BadRequestException("Expected JSON, but got a multipart body.")
                 else -> withContext(Dispatchers.IO) {
-                    Serialization.bson.load(
+                    serialization.bson.load(
                         serializer,
                         stream().readBytes()
                     )
                 }
             }
             ContentType.Application.Cbor -> when (val body = this) {
-                is HttpContent.Text -> Serialization.cbor.decodeFromByteArray(serializer, body.string.toByteArray())
-                is HttpContent.Binary -> Serialization.cbor.decodeFromByteArray(serializer, body.bytes)
+                is HttpContent.Text -> serialization.cbor.decodeFromByteArray(serializer, body.string.toByteArray())
+                is HttpContent.Binary -> serialization.cbor.decodeFromByteArray(serializer, body.bytes)
                 is HttpContent.Multipart -> throw BadRequestException("Expected JSON, but got a multipart body.")
                 else -> withContext(Dispatchers.IO) {
-                    Serialization.cbor.decodeFromByteArray(
+                    serialization.cbor.decodeFromByteArray(
                         serializer,
                         body.stream().readBytes()
                     )
@@ -99,7 +104,7 @@ suspend fun <T> HttpContent.parse(serializer: KSerializer<T>): T {
                         when (part) {
                             is HttpContent.Multipart.Part.FormItem -> {
                                 if (part.key == multipartJsonKey) {
-                                    baselineJson = Serialization.json.parseToJsonElement(part.value)
+                                    baselineJson = serialization.json.parseToJsonElement(part.value)
                                 }
                             }
                             is HttpContent.Multipart.Part.DataItem -> {
@@ -117,7 +122,7 @@ suspend fun <T> HttpContent.parse(serializer: KSerializer<T>): T {
                                 //}
                                 part.content.stream()
                                     .use { input ->
-                                        FilesSettings.instance.root.resolveFileWithUniqueName(
+                                        files().root.resolveFileWithUniqueName(
                                             "files/${part.filename}"
                                         ).upload(input)
                                     }
@@ -135,7 +140,7 @@ suspend fun <T> HttpContent.parse(serializer: KSerializer<T>): T {
                     if (baselineJson is JsonObject) {
                         baselineJson.jsonObject.writeInto(mainData)
                         mainData.putAll(overrideData)
-                        Serialization.json.decodeFromJsonElement(serializer, mainData.toJsonObject())
+                        serialization.json.decodeFromJsonElement(serializer, mainData.toJsonObject())
                     } else throw BadRequestException("")
                 }
                 else -> throw BadRequestException("Expected multipart body, but got a ${body::class.simpleName}.")
@@ -147,27 +152,29 @@ suspend fun <T> HttpContent.parse(serializer: KSerializer<T>): T {
     }
 }
 
+context(HasSerialization)
 suspend inline fun <reified T> T.toHttpContent(acceptedTypes: List<ContentType>): HttpContent? =
-    toHttpContent(acceptedTypes, Serialization.module.serializer())
+    toHttpContent(acceptedTypes, serializer())
 
+context(HasSerialization)
 suspend fun <T> T.toHttpContent(acceptedTypes: List<ContentType>, serializer: KSerializer<T>): HttpContent? {
     if(this == Unit) return null
     for (contentType in acceptedTypes) {
         when (contentType) {
             ContentType.Application.Json -> return HttpContent.Text(
-                Serialization.json.encodeToString(serializer, this),
+                serialization.json.encodeToString(serializer, this),
                 contentType
             )
             ContentType.Text.CSV -> return HttpContent.Text(
-                Serialization.csv.encodeToString(serializer, this),
+                serialization.csv.encodeToString(serializer, this),
                 contentType
             )
             ContentType.Application.Bson -> return HttpContent.Binary(
-                Serialization.bson.dump(serializer, this),
+                serialization.bson.dump(serializer, this),
                 contentType
             )
             ContentType.Application.Cbor -> return HttpContent.Binary(
-                Serialization.cbor.encodeToByteArray(
+                serialization.cbor.encodeToByteArray(
                     serializer,
                     this
                 ), contentType
@@ -176,12 +183,13 @@ suspend fun <T> T.toHttpContent(acceptedTypes: List<ContentType>, serializer: KS
         }
     }
     return HttpContent.Text(
-        Serialization.json.encodeToString(serializer, this),
+        serialization.json.encodeToString(serializer, this),
         ContentType.Application.Json
     )
 }
 
 
+context(HasSerialization)
 @OptIn(ExperimentalSerializationApi::class)
 private fun KSerializer<*>.isFile(parts: List<String>): Boolean {
     var current = this.descriptor
@@ -192,9 +200,9 @@ private fun KSerializer<*>.isFile(parts: List<String>): Boolean {
     }
     var descriptor = current.getElementDescriptor(current.getElementIndex(parts.last()))
     if (descriptor.kind == SerialKind.CONTEXTUAL) {
-        descriptor = Serialization.module.getContextualDescriptor(descriptor)!!
+        descriptor = serialization.module.getContextualDescriptor(descriptor)!!
     }
-    return descriptor == Serialization.module.getContextual(ServerFile::class)?.descriptor
+    return descriptor == serialization.module.getContextual(ServerFile::class)?.descriptor
 }
 
 @Suppress("UNCHECKED_CAST")

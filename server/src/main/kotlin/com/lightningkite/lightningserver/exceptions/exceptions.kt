@@ -1,5 +1,6 @@
 package com.lightningkite.lightningserver.exceptions
 
+import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.core.ContentType
 import com.lightningkite.lightningserver.http.*
 import com.lightningkite.lightningserver.http.HttpHeaders
@@ -15,11 +16,13 @@ open class HttpStatusException(
     cause: Throwable? = null
 ): Exception("$status: ${body?.data}", cause) {
     class Body<T>(val data: T, val serializer: KSerializer<T>) {
+        context(ServerRunner)
         suspend fun toHttpContent(acceptedTypes: List<ContentType>): HttpContent? = data.toHttpContent(acceptedTypes, serializer)
     }
     companion object {
         inline fun <reified T> toBody(value: T): Body<T> = Body(value, serializer())
     }
+    context(ServerRunner)
     suspend fun toResponse(request: HttpRequest): HttpResponse = HttpResponse(
         status = status,
         body = body?.toHttpContent(request.headers.accept)

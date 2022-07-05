@@ -1,5 +1,6 @@
 package com.lightningkite.lightningserver.websocket
 
+import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.core.ServerPath
 import com.lightningkite.lightningserver.exceptions.HttpStatusException
 import com.lightningkite.lightningserver.http.*
@@ -9,31 +10,26 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import java.util.*
 
-object WebSockets {
-    val handlers = mutableMapOf<ServerPath, Handler>()
-    data class ConnectEvent(
-        val path: ServerPath,
-        val parts: Map<String, String>,
-        val wildcard: String? = null,
-        val queryParameters: List<Pair<String, String>>,
-        val id: String,
-        val headers: HttpHeaders,
-        val domain: String,
-        val protocol: String,
-        val sourceIp: String
-    ) {
-        fun queryParameter(key: String): String? = queryParameters.find { it.first == key }?.second
-    }
-    data class MessageEvent(val id: String, val content: String)
-    data class DisconnectEvent(val id: String)
-    var engineSendMethod: suspend (id: String, content: String)->Unit = { _, _ -> throw IllegalStateException("No engine-defined send method for websockets.") }
-    suspend fun send(id: String, content: String): Unit = engineSendMethod(id, content)
+data class WebSocketConnectEvent(
+    val path: ServerPath,
+    val parts: Map<String, String>,
+    val wildcard: String? = null,
+    val queryParameters: List<Pair<String, String>>,
+    val id: String,
+    val headers: HttpHeaders,
+    val domain: String,
+    val protocol: String,
+    val sourceIp: String
+) {
+    fun queryParameter(key: String): String? = queryParameters.find { it.first == key }?.second
+}
+data class WebSocketMessageEvent(val id: String, val content: String)
+data class WebSocketDisconnectEvent(val id: String)
 
-    interface Handler {
-        suspend fun connect(event: ConnectEvent)
-        suspend fun message(event: MessageEvent)
-        suspend fun disconnect(event: DisconnectEvent)
-    }
+interface WebSocketHandler {
+    suspend fun ServerRunner.connect(event: WebSocketConnectEvent)
+    suspend fun ServerRunner.message(event: WebSocketMessageEvent)
+    suspend fun ServerRunner.disconnect(event: WebSocketDisconnectEvent)
 }
 
 data class VirtualSocket(val incoming: ReceiveChannel<String>, val send: suspend (String)->Unit)

@@ -44,7 +44,7 @@ import kotlin.reflect.KProperty1
 @LightningServerDsl
 inline fun <reified USER, reified T : HasId<ID>, reified ID : Comparable<ID>> ServerPath.restApi(
     noinline getCollection: suspend (principal: USER) -> FieldCollection<T>
-) = restApi(AuthInfo(), Serialization.module.serializer(), Serialization.module.serializer(), getCollection)
+) = restApi(AuthInfo(), serializer(), serializer(), getCollection)
 
 /**
  * Creates a Restful API for the model provided.

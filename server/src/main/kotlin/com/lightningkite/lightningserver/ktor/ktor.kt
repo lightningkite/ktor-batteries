@@ -1,21 +1,14 @@
 package com.lightningkite.lightningserver.ktor
 
 import com.lightningkite.lightningserver.HtmlDefaults
-import com.lightningkite.lightningserver.cache.cache
+import com.lightningkite.lightningserver.Server
 import com.lightningkite.lightningserver.cache.get
 import com.lightningkite.lightningserver.cache.set
 import com.lightningkite.lightningserver.cache.setIfNotExists
-import com.lightningkite.lightningserver.exceptions.ExceptionSettings
-import com.lightningkite.lightningserver.exceptions.reportException
 import com.lightningkite.lightningserver.http.*
 import com.lightningkite.lightningserver.http.HttpHeaders
 import com.lightningkite.lightningserver.pubsub.get
-import com.lightningkite.lightningserver.pubsub.pubSub
 import com.lightningkite.lightningserver.schedule.Schedule
-import com.lightningkite.lightningserver.schedule.Scheduler
-import com.lightningkite.lightningserver.settings.GeneralServerSettings
-import com.lightningkite.lightningserver.tasks.Tasks
-import com.lightningkite.lightningserver.websocket.WebSockets
 import io.ktor.http.*
 import io.ktor.http.HttpMethod
 import io.ktor.http.content.*
@@ -44,9 +37,10 @@ import kotlin.collections.HashMap
 import com.lightningkite.lightningserver.core.ContentType as HttpContentType
 import com.lightningkite.lightningserver.http.HttpMethod as MyHttpMethod
 
-fun Application.lightningServer() {
+classn
+fun Application.lightningServer(server: Server) {
     try {
-        install(io.ktor.server.websocket.WebSockets)
+        install(WebSockets)
         install(CORS) {
 
             allowMethod(HttpMethod.Post)

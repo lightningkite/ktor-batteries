@@ -2,13 +2,17 @@ package com.lightningkite.lightningserver.auth
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.lightningkite.lightningserver.Server
+import com.lightningkite.lightningserver.ServerBuilder
+import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.core.LightningServerDsl
 import com.lightningkite.lightningserver.core.ServerPath
+import com.lightningkite.lightningserver.exceptions.NotFoundException
 import com.lightningkite.lightningserver.http.HttpRoute
-import com.lightningkite.lightningserver.settings.GeneralServerSettings
 import io.ktor.server.plugins.*
 import io.ktor.server.routing.*
 import io.ktor.util.*
+import kotlinx.serialization.builtins.nullable
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.bouncycastle.openssl.PEMParser
@@ -24,23 +28,14 @@ import java.util.*
  * @param defaultLanding The final page to send the user after authentication.
  * @param emailToId A lambda that returns the users ID given an email.
  */
+context(ServerBuilder)
 @LightningServerDsl
 fun ServerPath.oauthApple(
     landingRoute: HttpRoute,
-    emailToId: suspend (String) -> String
+    emailToId: suspend ServerRunner.(String) -> String
 ) {
     Security.addProvider(BouncyCastleProvider())
-    val settings = AuthSettings.instance.oauth["apple"] ?: return
-    val teamId = settings.secret.substringBefore("|")
-    val keyString = settings.secret.substringAfter("|")
-    val algorithm = run {
-        val pk = JcaPEMKeyConverter().getPrivateKey(PEMParser(StringReader("""
-            -----BEGIN PRIVATE KEY-----
-            ${keyString.replace(" ", "")}
-            -----END PRIVATE KEY-----
-        """.trimIndent())).use { it.readObject() as PrivateKeyInfo })
-        Algorithm.ECDSA256(null, pk as ECPrivateKey)
-    }
+    val settings = require(Server.Setting("oauth-apple", OauthProviderCredentials.serializer().nullable) { null })
     return oauth(
     landingRoute = landingRoute,
         niceName = "Apple",
@@ -50,12 +45,23 @@ fun ServerPath.oauthApple(
         scope = "email",
         additionalParams="&response_mode=form_post",
         secretTransform = {
+            val s = settings() ?: throw NotFoundException("OAuth for Apple is not configured")
+            val teamId = s.secret.substringBefore("|")
+            val keyString = s.secret.substringAfter("|")
+            val algorithm = run {
+                val pk = JcaPEMKeyConverter().getPrivateKey(PEMParser(StringReader("""
+            -----BEGIN PRIVATE KEY-----
+            ${keyString.replace(" ", "")}
+            -----END PRIVATE KEY-----
+        """.trimIndent())).use { it.readObject() as PrivateKeyInfo })
+                Algorithm.ECDSA256(null, pk as ECPrivateKey)
+            }
             JWT.create()
                 .withIssuer(teamId)
                 .withIssuedAt(Date())
                 .withExpiresAt(Date(System.currentTimeMillis() + 1000L * 60L * 60L * 24L))
                 .withAudience("https://appleid.apple.com")
-                .withSubject(settings.id)
+                .withSubject(s.id)
                 .sign(algorithm)
         }
     ) {

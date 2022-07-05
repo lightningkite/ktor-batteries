@@ -4,6 +4,7 @@ package com.lightningkite.lightningserver.typed
 
 import com.lightningkite.lightningserver.serialization.Serialization
 import com.lightningkite.lightningdb.*
+import com.lightningkite.lightningserver.ServerBuilder
 import com.lightningkite.lightningserver.core.LightningServerDsl
 import com.lightningkite.lightningserver.core.ServerPath
 import com.lightningkite.lightningserver.http.*
@@ -16,6 +17,7 @@ import kotlinx.serialization.internal.GeneratedSerializer
 import kotlinx.serialization.serializer
 import kotlin.reflect.KType
 
+context(ServerBuilder)
 @LightningServerDsl
 fun ServerPath.apiHelp() = get.handler { request ->
     val rootRoute = this
@@ -24,7 +26,7 @@ fun ServerPath.apiHelp() = get.handler { request ->
         body {
             h1 { +"API Docs" }
             h2 { +"Endpoints" }
-            for (api in Documentable.endpoints) {
+            for (api in server.typedEndpoints) {
                 h3 {
                     +(api.route.method.toString())
                     +" "
@@ -37,7 +39,7 @@ fun ServerPath.apiHelp() = get.handler { request ->
                     p {
                         +"Input: "
                         api.inputType.let {
-                            type(it)
+                            type(serialization, it)
                         } ?: run {
                             +"N/A"
                         }
@@ -45,7 +47,7 @@ fun ServerPath.apiHelp() = get.handler { request ->
                     p {
                         +"Output: "
                         api.outputType.let {
-                            type(it)
+                            type(serialization, it)
                         } ?: run {
                             +"N/A"
                         }
@@ -68,7 +70,7 @@ fun ServerPath.apiHelp() = get.handler { request ->
 
             h2 { +"Types" }
 
-            Documentable.usedTypes
+            server.usedTypes
                 .sortedBy { it.descriptor.serialName.substringBefore('<').substringAfterLast('.') }
                 .forEach { serializer ->
                     val desc = serializer.descriptor
@@ -80,7 +82,7 @@ fun ServerPath.apiHelp() = get.handler { request ->
                                     p {
                                         +desc.getElementName(index)
                                         +": "
-                                        type(part)
+                                        type(serialization, part)
                                     }
                                 }
                             }
@@ -154,14 +156,14 @@ fun FlowContent.documentType(serializer: KSerializer<*>, body: FlowContent.()->U
     body()
 }
 
-private fun FlowContent.type(type: KSerializer<*>) {
+private fun FlowContent.type(serialization: Serialization, type: KSerializer<*>) {
     type.nullElement()?.let {
-        type(it)
+        type(serialization, it)
         +"?"
         return
     }
     if (type is ContextualSerializer) {
-        type(type.uncontextualize())
+        type(serialization, type.uncontextualize(serialization))
         return
     }
     val baseName = type.descriptor.serialName.substringBefore('<').substringAfterLast('.')
@@ -176,11 +178,11 @@ private fun FlowContent.type(type: KSerializer<*>) {
             it.forEach {
                 if (first) first = false
                 else +", "
-                type(it)
+                type(serialization, it)
             }
             +">"
         }
     }
 }
 
-private fun FlowContent.type(type: KType) = type(Serialization.json.serializersModule.serializer(type))
+private fun FlowContent.type(serialization: Serialization, type: KType) = type(serialization, serialization.json.serializersModule.serializer(type))

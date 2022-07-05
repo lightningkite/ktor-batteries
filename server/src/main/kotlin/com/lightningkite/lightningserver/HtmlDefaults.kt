@@ -3,7 +3,7 @@ package com.lightningkite.lightningserver
 import com.lightningkite.lightningserver.settings.GeneralServerSettings
 
 object HtmlDefaults {
-    var basePage: (content: String) -> String = { content ->
+    var basePage: ServerRunner.(content: String) -> String = { content ->
         """
             <!DOCTYPE html>
             <html>
@@ -17,7 +17,7 @@ object HtmlDefaults {
             </html>
         """.trimIndent()
     }
-    var baseEmail: (content: String) -> String = { content ->
+    var baseEmail: ServerRunner.(content: String) -> String = { content ->
         """
             <!DOCTYPE html>
             <html>
@@ -31,12 +31,12 @@ object HtmlDefaults {
             </html>
         """.trimIndent()
     }
-    var defaultLoginEmailTemplate: (suspend (email: String, link: String) -> String) = { email: String, link: String ->
+    var defaultLoginEmailTemplate: (suspend ServerRunner.(email: String, link: String) -> String) = { email: String, link: String ->
         baseEmail("""
         <p>We received a request for a login email for ${email}. To log in, please click the link below.</p>
         <a href="$link">Click here to login</a>
         <p>If you did not request to be logged in, you can simply ignore this email.</p>
-        <h3>${GeneralServerSettings.instance.projectName}</h3>
+        <h3>${server.name}</h3>
         """.trimIndent())
     }
 }

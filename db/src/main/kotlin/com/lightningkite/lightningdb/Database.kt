@@ -6,6 +6,7 @@ import kotlin.reflect.typeOf
 
 interface Database {
     fun <T: Any> collection(type: KType, name: String): FieldCollection<T>
+    companion object
 }
 
 inline fun <reified T: Any> Database.collection(name: String = T::class.simpleName!!): FieldCollection<T> {

@@ -1,18 +1,21 @@
 package com.lightningkite.lightningserver.websocket
 
+import com.lightningkite.lightningserver.ServerBuilder
+import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.core.LightningServerDsl
 import com.lightningkite.lightningserver.core.ServerPath
 
+context(ServerBuilder)
 @LightningServerDsl
 fun ServerPath.websocket(
-    connect: suspend (WebSockets.ConnectEvent) -> Unit = { },
-    message: suspend (WebSockets.MessageEvent) -> Unit = { },
-    disconnect: suspend (WebSockets.DisconnectEvent) -> Unit = {}
+    connect: suspend (WebSocketConnectEvent) -> Unit = { },
+    message: suspend (WebSocketMessageEvent) -> Unit = { },
+    disconnect: suspend (WebSocketDisconnectEvent) -> Unit = {}
 ): ServerPath {
-    WebSockets.handlers[this] = object: WebSockets.Handler {
-        override suspend fun connect(event: WebSockets.ConnectEvent) = connect(event)
-        override suspend fun message(event: WebSockets.MessageEvent) = message(event)
-        override suspend fun disconnect(event: WebSockets.DisconnectEvent) = disconnect(event)
+    webSocketHandler = object: WebSocketHandler {
+        override suspend fun ServerRunner.connect(event: WebSocketConnectEvent) = connect(event)
+        override suspend fun ServerRunner.message(event: WebSocketMessageEvent) = message(event)
+        override suspend fun ServerRunner.disconnect(event: WebSocketDisconnectEvent) = disconnect(event)
     }
     return this
 }

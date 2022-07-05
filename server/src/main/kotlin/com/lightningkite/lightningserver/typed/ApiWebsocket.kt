@@ -1,18 +1,17 @@
 package com.lightningkite.lightningserver.typed
 
+import com.lightningkite.lightningserver.ServerBuilder
+import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.auth.*
 import com.lightningkite.lightningserver.core.LightningServerDsl
 import com.lightningkite.lightningserver.core.ServerPath
 import com.lightningkite.lightningserver.http.HttpHeaders
 import com.lightningkite.lightningserver.http.HttpRequest
 import com.lightningkite.lightningserver.routes.docName
+import com.lightningkite.lightningserver.serialization.HasSerialization
 import com.lightningkite.lightningserver.serialization.Serialization
 import com.lightningkite.lightningserver.serialization.parse
-import com.lightningkite.lightningserver.settings.GeneralServerSettings
-import com.lightningkite.lightningserver.websocket.VirtualSocket
-import com.lightningkite.lightningserver.websocket.WebSocketClose
-import com.lightningkite.lightningserver.websocket.WebSockets
-import com.lightningkite.lightningserver.websocket.test
+import com.lightningkite.lightningserver.websocket.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.util.*
@@ -28,6 +27,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.selects.SelectClause1
 import kotlinx.html.INPUT
+import kotlinx.html.OUTPUT
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -38,6 +38,7 @@ import kotlin.reflect.typeOf
 
 data class ApiWebsocket<USER, INPUT, OUTPUT>(
     override val path: ServerPath,
+    val auth: suspend ServerRunner.(WebSocketConnectEvent)->Any?,
     override val authInfo: AuthInfo<USER>,
     val inputType: KSerializer<INPUT>,
     val outputType: KSerializer<OUTPUT>,
@@ -45,45 +46,45 @@ data class ApiWebsocket<USER, INPUT, OUTPUT>(
     override val description: String = summary,
     val errorCases: List<ErrorCase>,
     val routeTypes: Map<String, KSerializer<*>> = mapOf(),
-    val connect: suspend ApiWebsocket<USER, INPUT, OUTPUT>.(TypedConnectEvent<USER>) -> Unit,
-    val message: suspend ApiWebsocket<USER, INPUT, OUTPUT>.(TypedMessageEvent<INPUT>) -> Unit,
-    val disconnect: suspend ApiWebsocket<USER, INPUT, OUTPUT>.(WebSockets.DisconnectEvent) -> Unit,
-) : Documentable, WebSockets.Handler {
+    val connect: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(TypedConnectEvent<USER>) -> Unit,
+    val message: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(TypedMessageEvent<INPUT>) -> Unit,
+    val disconnect: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(WebSocketDisconnectEvent) -> Unit,
+) : Documentable, WebSocketHandler {
 
     data class TypedConnectEvent<USER>(val user: USER, val id: String)
     data class TypedMessageEvent<INPUT>(val id: String, val content: INPUT)
 
     data class ErrorCase(val closeReason: WebSocketClose, val internalCode: Int, val description: String)
 
-    override suspend fun connect(event: WebSockets.ConnectEvent) {
-        this.connect.invoke(this, TypedConnectEvent(authInfo.checker(event.rawUser()), event.id))
+    override suspend fun ServerRunner.connect(event: WebSocketConnectEvent) {
+        connect.invoke(this, this@ApiWebsocket, TypedConnectEvent(authInfo.checker(auth(event)), event.id))
     }
 
-    override suspend fun message(event: WebSockets.MessageEvent) {
-        val parsed = event.content.let { Serialization.json.decodeFromString(inputType, it) }
-        this.message.invoke(this, TypedMessageEvent(event.id, parsed))
+    override suspend fun ServerRunner.message(event: WebSocketMessageEvent) {
+        val parsed = event.content.let { serialization.json.decodeFromString(inputType, it) }
+        message.invoke(this, this@ApiWebsocket, TypedMessageEvent(event.id, parsed))
     }
 
-    override suspend fun disconnect(event: WebSockets.DisconnectEvent) {
-        this.disconnect.invoke(this, event)
+    override suspend fun ServerRunner.disconnect(event: WebSocketDisconnectEvent) {
+        disconnect.invoke(this, this@ApiWebsocket, event)
     }
 
-    suspend fun send(id: String, content: OUTPUT) = WebSockets.send(id, Serialization.json.encodeToString(outputType, content))
-
+    suspend fun ServerRunner.send(id: String, content: OUTPUT) = sendWebSocket(id, serialization.json.encodeToString(outputType, content))
 }
 
+context(ServerBuilder)
 @LightningServerDsl
 inline fun <reified USER, reified INPUT, reified OUTPUT> ServerPath.typedWebsocket(
     summary: String,
     description: String = summary,
     errorCases: List<ApiWebsocket.ErrorCase>,
-    noinline connect: suspend ApiWebsocket<USER, INPUT, OUTPUT>.(ApiWebsocket.TypedConnectEvent<USER>) -> Unit = { },
-    noinline message: suspend ApiWebsocket<USER, INPUT, OUTPUT>.(ApiWebsocket.TypedMessageEvent<INPUT>) -> Unit = { },
-    noinline disconnect: suspend ApiWebsocket<USER, INPUT, OUTPUT>.(WebSockets.DisconnectEvent) -> Unit = {}
+    noinline connect: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(ApiWebsocket.TypedConnectEvent<USER>) -> Unit,
+    noinline message: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(ApiWebsocket.TypedMessageEvent<INPUT>) -> Unit,
+    noinline disconnect: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(WebSocketDisconnectEvent) -> Unit,
 ): ApiWebsocket<USER, INPUT, OUTPUT> = typedWebsocket(
     authInfo = AuthInfo(),
-    inputType = Serialization.module.serializer(),
-    outputType = Serialization.module.serializer(),
+    inputType = serializer(),
+    outputType = serializer(),
     summary = summary,
             description = description,
             errorCases = errorCases,
@@ -92,6 +93,7 @@ inline fun <reified USER, reified INPUT, reified OUTPUT> ServerPath.typedWebsock
             disconnect = disconnect,
 )
 
+context(ServerBuilder)
 @LightningServerDsl
 fun <USER, INPUT, OUTPUT> ServerPath.typedWebsocket(
     authInfo: AuthInfo<USER>,
@@ -100,12 +102,13 @@ fun <USER, INPUT, OUTPUT> ServerPath.typedWebsocket(
     summary: String,
     description: String = summary,
     errorCases: List<ApiWebsocket.ErrorCase>,
-    connect: suspend ApiWebsocket<USER, INPUT, OUTPUT>.(ApiWebsocket.TypedConnectEvent<USER>) -> Unit = { },
-    message: suspend ApiWebsocket<USER, INPUT, OUTPUT>.(ApiWebsocket.TypedMessageEvent<INPUT>) -> Unit = { },
-    disconnect: suspend ApiWebsocket<USER, INPUT, OUTPUT>.(WebSockets.DisconnectEvent) -> Unit = {}
+    connect: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(ApiWebsocket.TypedConnectEvent<USER>) -> Unit,
+    message: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(ApiWebsocket.TypedMessageEvent<INPUT>) -> Unit,
+    disconnect: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(WebSocketDisconnectEvent) -> Unit,
 ): ApiWebsocket<USER, INPUT, OUTPUT> {
     val ws = ApiWebsocket(
         path = this,
+        auth = wsAuthorizationMethod,
         authInfo = authInfo,
         inputType = inputType,
         outputType = outputType,
@@ -116,18 +119,19 @@ fun <USER, INPUT, OUTPUT> ServerPath.typedWebsocket(
         message = message,
         disconnect = disconnect,
     )
-    WebSockets.handlers[this] = ws
+    this.webSocketHandler = ws
     return ws
 }
 
 data class TypedVirtualSocket<INPUT, OUTPUT>(val incoming: ReceiveChannel<OUTPUT>, val send: suspend (INPUT)->Unit)
+context(ServerRunner)
 suspend fun <USER, INPUT, OUTPUT> ApiWebsocket<USER, INPUT, OUTPUT>.test(
     parts: Map<String, String> = mapOf(),
     wildcard: String? = null,
     queryParameters: List<Pair<String, String>> = listOf(),
     headers: HttpHeaders = HttpHeaders.EMPTY,
-    domain: String = GeneralServerSettings.instance.publicUrl.substringAfter("://").substringBefore("/"),
-    protocol: String = GeneralServerSettings.instance.publicUrl.substringBefore("://"),
+    domain: String = publicUrl.substringAfter("://").substringBefore("/"),
+    protocol: String = publicUrl.substringBefore("://"),
     sourceIp: String = "0.0.0.0",
     test: suspend TypedVirtualSocket<INPUT, OUTPUT>.()->Unit
 ) {
@@ -144,12 +148,12 @@ suspend fun <USER, INPUT, OUTPUT> ApiWebsocket<USER, INPUT, OUTPUT>.test(
             coroutineScope {
                 val job = launch {
                     for(it in incoming) {
-                        channel.send(Serialization.json.decodeFromString(outputType, it))
+                        channel.send(serialization.json.decodeFromString(outputType, it))
                     }
                 }
                 test(TypedVirtualSocket<INPUT, OUTPUT>(
                     incoming = channel,
-                    send = { send(Serialization.json.encodeToString(inputType, it)) }
+                    send = { send(serialization.json.encodeToString(inputType, it)) }
                 ))
                 job.cancelAndJoin()
             }

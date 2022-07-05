@@ -2,17 +2,15 @@ package com.lightningkite.lightningserver.email
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.apache.commons.mail.DefaultAuthenticator
 import org.apache.commons.mail.EmailAttachment
 import org.apache.commons.mail.HtmlEmail
 import org.apache.commons.mail.MultiPartEmail
 import org.apache.commons.mail.SimpleEmail
-import javax.mail.Authenticator
 
 /**
  * An email client that will send real emails through SMTP.
  */
-class SmtpEmailClient(val smtpConfig: SmtpConfig) : EmailClient {
+class SmtpEmailClient(val smtpConfig: EmailConfig) : EmailClient {
     override suspend fun send(
         subject: String,
         to: List<String>,

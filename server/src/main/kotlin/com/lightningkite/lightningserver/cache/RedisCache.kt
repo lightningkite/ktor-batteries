@@ -15,14 +15,14 @@ import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import java.util.concurrent.ConcurrentHashMap
 
-class RedisCache(val client: RedisClient): CacheInterface {
+class RedisCache(override val serialization: Serialization, val client: RedisClient): CacheInterface {
     val connection = client.connect().reactive()
     override suspend fun <T> get(key: String, serializer: KSerializer<T>): T? {
-        return connection.get(key).awaitFirstOrNull()?.let { Serialization.json.decodeFromString(serializer, it) }
+        return connection.get(key).awaitFirstOrNull()?.let { serialization.json.decodeFromString(serializer, it) }
     }
 
     override suspend fun <T> set(key: String, value: T, serializer: KSerializer<T>, timeToLiveMilliseconds: Long?) {
-        connection.set(key, Serialization.json.encodeToString(serializer, value), SetArgs().let { timeToLiveMilliseconds?.let { t -> it.ex(t) } ?: it }).collect {}
+        connection.set(key, serialization.json.encodeToString(serializer, value), SetArgs().let { timeToLiveMilliseconds?.let { t -> it.ex(t) } ?: it }).collect {}
     }
 
     override suspend fun <T> setIfNotExists(
@@ -30,7 +30,7 @@ class RedisCache(val client: RedisClient): CacheInterface {
         value: T,
         serializer: KSerializer<T>
     ): Boolean {
-        return connection.setnx(key, Serialization.json.encodeToString(serializer, value)).awaitFirst()
+        return connection.setnx(key, serialization.json.encodeToString(serializer, value)).awaitFirst()
     }
 
     override suspend fun add(key: String, value: Int) {

@@ -4,6 +4,7 @@ import com.dalet.vfs2.provider.azure.AzFileObject
 import com.github.vfss3.S3FileObject
 import com.lightningkite.lightningserver.client
 import com.lightningkite.lightningdb.ServerFile
+import com.lightningkite.lightningserver.ServerRunner
 import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.server.plugins.*
@@ -20,6 +21,8 @@ import org.slf4j.LoggerFactory
 import java.math.BigInteger
 import java.net.URLDecoder
 import java.security.MessageDigest
+import java.text.DateFormat
+import java.text.SimpleDateFormat
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
@@ -27,7 +30,7 @@ import javax.crypto.spec.SecretKeySpec
  * Used to serialize and deserialize a ServerFile as a String. This will also handle security for ServerFiles.
  * If security is required it will serialize as a pre-signed URL. It will also check deserializing of url to confirm it is valid.
  */
-object ExternalServerFileSerializer: KSerializer<ServerFile> {
+class ExternalServerFileSerializer(val runner: ServerRunner): KSerializer<ServerFile> {
     @OptIn(ExperimentalSerializationApi::class)
     override val descriptor: SerialDescriptor = object: SerialDescriptor {
         override val kind: SerialKind = PrimitiveKind.STRING
@@ -43,8 +46,8 @@ object ExternalServerFileSerializer: KSerializer<ServerFile> {
         override val annotations: List<Annotation> = ServerFile::class.annotations
     }
 
-    override fun serialize(encoder: Encoder, value: ServerFile) {
-        val root = FilesSettings.instance.root
+    override fun serialize(encoder: Encoder, value: ServerFile) = with(runner) {
+        val root = files().root
         val rootUrl = root.publicUrlUnsigned
         if(!value.location.startsWith(rootUrl)) {
             LoggerFactory.getLogger("com.lightningkite.lightningserver.files").warn("The given url (${value.location}) does not start with the files root ($rootUrl).")
@@ -55,15 +58,15 @@ object ExternalServerFileSerializer: KSerializer<ServerFile> {
         }
     }
 
-    override fun deserialize(decoder: Decoder): ServerFile {
-        val root = FilesSettings.instance.root
+    override fun deserialize(decoder: Decoder): ServerFile = with(runner) {
+        val root = files().root
         val rootUrl = root.publicUrlUnsigned
         val raw = decoder.decodeString()
         if(!raw.startsWith(rootUrl)) throw BadRequestException("The given url ($raw) does not start with the files root ($rootUrl).")
         val newFile = root.resolveFile(raw.removePrefix(rootUrl))
         when(newFile) {
             is AzFileObject -> {
-                if(FilesSettings.instance.signedUrlExpirationSeconds != null) {
+                if(signedUrlExpirationSeconds() != null) {
                     // TODO: A local check like we do for AWS would be more performant
                     runBlocking {
                         if(!client.get(raw) { header("Range", "bytes=0-0") }.status.isSuccess()) throw BadRequestException("URL does not appear to be signed properly")
@@ -71,48 +74,14 @@ object ExternalServerFileSerializer: KSerializer<ServerFile> {
                 }
             }
             is S3FileObject -> {
-                if(FilesSettings.instance.signedUrlExpirationSeconds != null) {
+                signedUrlExpirationSeconds()?.let { exp ->
                     val headers = raw.substringAfter('?').split('&').associate {
                         URLDecoder.decode(it.substringBefore('='), Charsets.UTF_8) to URLDecoder.decode(it.substringAfter('=', ""), Charsets.UTF_8)
                     }
-                    val accessKey = FilesSettings.instance.storageUrl.substringAfter("://").substringBefore('@', "").substringBefore(':')
-                    val secretKey = FilesSettings.instance.storageUrl.substringAfter("://").substringBefore('@', "").substringAfter(':').substringBefore(':')
-                    val region = raw.substringAfter("://s3-").substringBefore(".amazonaws.com")
-                    val bucket = raw.substringAfter("amazonaws.com/").substringBefore('/')
-                    val objectPath = "/" + raw.substringAfter("amazonaws.com/").substringBefore("?")
                     val date = headers["X-Amz-Date"]!!
-                    val algorithm = headers["X-Amz-Algorithm"]!!
-                    val expires = headers["X-Amz-Expires"]!!
-                    val credential = headers["X-Amz-Credential"]!!
-                    val scope = credential.substringAfter("/")
+                    val dateParsed = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ").parse(date)
 
-                    val canonicalRequest = """
-                    GET
-                    $objectPath
-                    ${raw.substringAfter('?').substringBefore("&X-Amz-Signature=").split('&').sorted().joinToString("&")}
-                    host:s3-$region.amazonaws.com
-
-                    host
-                    UNSIGNED-PAYLOAD
-                """.trimIndent()
-
-                    val toSignString = """
-                    $algorithm
-                    $date
-                    $scope
-                    ${canonicalRequest.sha256()}
-                """.trimIndent()
-
-                    val signingKey = "AWS4$secretKey".toByteArray()
-                        .let { date.substringBefore('T').toByteArray().mac(it) }
-                        .let { region.toByteArray().mac(it) }
-                        .let { "s3".toByteArray().mac(it) }
-                        .let { "aws4_request".toByteArray().mac(it) }
-
-
-                    val signature = toSignString.toByteArray().mac(signingKey).toHex()
-
-                    if(signature != headers["X-Amz-Signature"]!!) {
+                    if(newFile.unstupidSignUrl(exp, dateParsed) == raw) {
                         runBlocking {
                             if(!client.get(raw) { header("Range", "bytes=0-0") }.status.isSuccess()) throw BadRequestException("URL does not appear to be signed properly")
                         }

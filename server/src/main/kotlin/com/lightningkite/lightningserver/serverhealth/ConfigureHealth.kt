@@ -1,10 +1,11 @@
 @file:UseContextualSerialization(Instant::class)
 package com.lightningkite.lightningserver.serverhealth
 
+import com.lightningkite.lightningserver.ServerBuilder
+import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.core.ServerPath
 import com.lightningkite.lightningserver.exceptions.ForbiddenException
 import com.lightningkite.lightningserver.http.get
-import com.lightningkite.lightningserver.settings.GeneralServerSettings
 import com.lightningkite.lightningserver.typed.typed
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseContextualSerialization
@@ -58,7 +59,8 @@ data class ServerHealth(
  * @param path The path you wish the endpoint to be at.
  * @param features A list of `HealthCheckable` features that you want reports on.
  */
-inline fun <reified USER> ServerPath.healthCheck(features: List<HealthCheckable>, crossinline allowed: suspend (USER)->Boolean = { true }) {
+context(ServerBuilder)
+inline fun <reified USER> ServerPath.healthCheck(crossinline allowed: suspend (USER)->Boolean = { true }) {
     get.typed(
         summary = "Get Server Health",
         description = "Gets the current status of the server",
@@ -67,7 +69,10 @@ inline fun <reified USER> ServerPath.healthCheck(features: List<HealthCheckable>
             if(!allowed(user)) throw ForbiddenException()
             val now = Instant.now()
             ServerHealth(
-                features = features
+                features = server.requirements
+                    .asSequence()
+                    .map { it() }
+                    .filterIsInstance<HealthCheckable>()
                     .associate {
                         ServerHealth.healthCache[it]?.takeIf {
                             now.toEpochMilli() - it.checkedAt.toEpochMilli() < 60_000 && it.level <= HealthStatus.Level.WARNING

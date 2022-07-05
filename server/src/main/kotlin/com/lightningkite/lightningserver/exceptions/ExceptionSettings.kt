@@ -7,58 +7,70 @@ import com.lightningkite.lightningserver.SetOnce
 import com.lightningkite.lightningserver.SettingSingleton
 import com.lightningkite.lightningserver.notifications.ConsoleNotificationInterface
 import com.lightningkite.lightningserver.notifications.FcmNotificationInterface
-import com.lightningkite.lightningserver.notifications.NotificationImplementation
 import com.lightningkite.lightningserver.serverhealth.HealthCheckable
 import com.lightningkite.lightningserver.serverhealth.HealthStatus
 import com.lightningkite.lightningdb.Database
+import com.lightningkite.lightningserver.Server
+import com.lightningkite.lightningserver.ServerRunner
 import io.ktor.util.logging.*
 import io.sentry.Sentry
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
+import kotlinx.serialization.builtins.nullable
+import kotlinx.serialization.builtins.serializer
 import org.slf4j.LoggerFactory
 import java.io.File
 
-/**
- * ExceptionSettings is used to configure reporting unhandled exceptions to a Sentry server.
- */
-@Serializable
-data class ExceptionSettings(
-    val sentryDsn: String? = null
-) : HealthCheckable {
-    companion object : SettingSingleton<ExceptionSettings>({ExceptionSettings()})
+val sentryDsn = Server.Setting("sentryDsn", String.serializer().nullable) { null }
 
-    init {
-        ExceptionSettings.instance = this
-        sentryDsn?.let {
-            Sentry.init(it)
-        }
-    }
-
-    override val healthCheckName: String
-        get() = "Error Monitoring"
-
-    override suspend fun healthCheck(): HealthStatus {
-        val report = try {
-            report(Exception("Health Check: Can Report Exception"))
-        } catch (e: Exception) {
-            return HealthStatus(HealthStatus.Level.ERROR, additionalMessage = e.message)
-        }
-        return if (report)
-            HealthStatus(HealthStatus.Level.OK)
-        else
-            HealthStatus(
-                HealthStatus.Level.WARNING,
-                additionalMessage = "Disabled"
-            )
-    }
-
-    fun report(t: Throwable): Boolean {
-        return when {
-            sentryDsn != null -> {
-                Sentry.capture(t)
-                true
-            }
-            else -> false
-        }
+context(ServerRunner)
+fun Throwable.report() {
+    sentryDsn()?.let {
+        Sentry.capture(this)
     }
 }
+
+///**
+// * ExceptionSettings is used to configure reporting unhandled exceptions to a Sentry server.
+// */
+//@Serializable
+//data class ExceptionSettings(
+//    val sentryDsn: String? = null
+//) : HealthCheckable {
+//    companion object : SettingSingleton<ExceptionSettings>({ExceptionSettings()})
+//
+//    init {
+//        ExceptionSettings.instance = this
+//        sentryDsn?.let {
+//            Sentry.init(it)
+//        }
+//    }
+//
+//    override val healthCheckName: String
+//        get() = "Error Monitoring"
+//
+//    override suspend fun healthCheck(): HealthStatus {
+//        val report = try {
+//            report(Exception("Health Check: Can Report Exception"))
+//        } catch (e: Exception) {
+//            return HealthStatus(HealthStatus.Level.ERROR, additionalMessage = e.message)
+//        }
+//        return if (report)
+//            HealthStatus(HealthStatus.Level.OK)
+//        else
+//            HealthStatus(
+//                HealthStatus.Level.WARNING,
+//                additionalMessage = "Disabled"
+//            )
+//    }
+//
+//    fun report(t: Throwable): Boolean {
+//        return when {
+//            sentryDsn != null -> {
+//                Sentry.capture(t)
+//                true
+//            }
+//            else -> false
+//        }
+//    }
+//}
