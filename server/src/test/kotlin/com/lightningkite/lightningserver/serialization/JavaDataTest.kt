@@ -46,8 +46,8 @@ class JavaDataTest {
             )
         )
         //000f 31 32 37 39 38 31 37 32 33 38 31 39 31 32 33 0000000000000002 0000000000000003 3f800000 40000000 40000000 40000000 00000001 00000003 >9200010001 >9200010002 >9200010003
-        val hex = Serialization.javaData.encodeToHexString(example)
+        val hex = Serialization().javaData.encodeToHexString(example)
         println(hex)
-        println(Serialization.javaData.decodeFromHexString<HubReport>(hex))
+        println(Serialization().javaData.decodeFromHexString<HubReport>(hex))
     }
 }

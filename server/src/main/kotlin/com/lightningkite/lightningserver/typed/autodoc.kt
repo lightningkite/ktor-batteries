@@ -17,9 +17,8 @@ import kotlinx.serialization.internal.GeneratedSerializer
 import kotlinx.serialization.serializer
 import kotlin.reflect.KType
 
-context(ServerBuilder)
 @LightningServerDsl
-fun ServerPath.apiHelp() = get.handler { request ->
+fun ServerBuilder.Path.apiHelp() = get.handler { request ->
     val rootRoute = this
     HttpResponse(body = HttpContent.Html {
         head { title("Index") }

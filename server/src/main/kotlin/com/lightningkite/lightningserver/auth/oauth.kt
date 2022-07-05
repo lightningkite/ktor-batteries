@@ -5,13 +5,10 @@ import com.lightningkite.lightningserver.ServerBuilder
 import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.client
 import com.lightningkite.lightningserver.core.LightningServerDsl
-import com.lightningkite.lightningserver.core.ServerPath
 import com.lightningkite.lightningserver.exceptions.BadRequestException
 import com.lightningkite.lightningserver.exceptions.NotFoundException
 import com.lightningkite.lightningserver.http.HttpResponse
-import com.lightningkite.lightningserver.http.HttpRoute
-import com.lightningkite.lightningserver.http.get
-import com.lightningkite.lightningserver.http.handler
+import com.lightningkite.lightningserver.http.HttpEndpoint
 import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.client.request.forms.*
@@ -51,10 +48,9 @@ data class OauthProviderCredentials(
  * @param secretTransform An optional lambda that allows any custom transformations on the client_secret before being used.
  * @param remoteTokenToUserId A lambda that will return the userId given the token from the third party.
  */
-context(ServerBuilder)
 @LightningServerDsl
-inline fun ServerPath.oauth(
-    landingRoute: HttpRoute,
+inline fun ServerBuilder.Path.oauth(
+    landingRoute: HttpEndpoint,
     niceName: String,
     codeName: String,
     authUrl: String,
@@ -64,12 +60,12 @@ inline fun ServerPath.oauth(
     crossinline secretTransform: ServerRunner.(String) -> String = { it },
     crossinline remoteTokenToUserId: suspend ServerRunner.(OauthResponse)->String
 ) {
-    val settings = require(Server.Setting("oauth-${codeName}", OauthProviderCredentials.serializer().nullable) { null })
-    val tokenSigner = require(JwtSigner.default)
+    val settings = builder.require(Server.Setting("oauth-${codeName}", OauthProviderCredentials.serializer().nullable) { null })
+    builder.require(JwtSignSettings.default)
 
     val landing = landingRoute
     val callbackRoute = get("callback")
-    get("login").handler = handler@{ request ->
+    get("login").handler { request ->
         HttpResponse.redirectToGet("""
                     $authUrl?
                     response_type=code&
@@ -79,7 +75,7 @@ inline fun ServerPath.oauth(
                     $additionalParams
                 """.trimIndent().replace("\n", ""))
     }
-    callbackRoute.handler = { request ->
+    callbackRoute.handler { request ->
         request.queryParameter("error")?.let {
             throw BadRequestException("Got error code '${it}' from $niceName.")
         } ?: request.queryParameter("code")?.let { code ->
@@ -94,7 +90,7 @@ inline fun ServerPath.oauth(
                 accept(ContentType.Application.Json)
             }.body()
 
-            HttpResponse.redirectToGet(publicUrl + landing.toString() + "?jwt=${tokenSigner().token(remoteTokenToUserId(response))}")
+            HttpResponse.redirectToGet(publicUrl + landing.toString() + "?jwt=${signer().token(remoteTokenToUserId(response))}")
         } ?: throw IllegalStateException()
     }
 }

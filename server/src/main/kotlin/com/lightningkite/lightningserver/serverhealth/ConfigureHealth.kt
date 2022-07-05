@@ -1,40 +1,22 @@
 @file:UseContextualSerialization(Instant::class)
+
 package com.lightningkite.lightningserver.serverhealth
 
+import com.lightningkite.lightningdb.HealthCheckable
+import com.lightningkite.lightningdb.HealthStatus
 import com.lightningkite.lightningserver.ServerBuilder
-import com.lightningkite.lightningserver.ServerRunner
-import com.lightningkite.lightningserver.core.ServerPath
 import com.lightningkite.lightningserver.exceptions.ForbiddenException
-import com.lightningkite.lightningserver.http.get
 import com.lightningkite.lightningserver.typed.typed
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseContextualSerialization
-import org.slf4j.event.Level
 import java.lang.management.ManagementFactory
-import java.lang.management.OperatingSystemMXBean
 import java.net.NetworkInterface
 import java.time.Instant
-import kotlin.streams.toList
-
-interface HealthCheckable {
-    val healthCheckName: String get() = this::class.simpleName ?: "???"
-    suspend fun healthCheck(): HealthStatus
-}
-
-@Serializable
-data class HealthStatus(val level: Level, val checkedAt: Instant = Instant.now(), val additionalMessage: String? = null) {
-    @Serializable
-    enum class Level(val color: String) {
-        OK("green"),
-        WARNING("yellow"),
-        URGENT("orange"),
-        ERROR("red")
-    }
-}
 
 @Serializable
 data class ServerHealth(
-    val serverId: String = NetworkInterface.getNetworkInterfaces().toList().sortedBy { it.name }.firstOrNull()?.hardwareAddress?.sumOf { it.hashCode() }?.toString(16) ?: "?",
+    val serverId: String = NetworkInterface.getNetworkInterfaces().toList().sortedBy { it.name }
+        .firstOrNull()?.hardwareAddress?.sumOf { it.hashCode() }?.toString(16) ?: "?",
     val memory: Memory = Memory(),
     val features: Map<String, HealthStatus> = mapOf(),
     val loadAverageCpu: Double = ManagementFactory.getOperatingSystemMXBean().systemLoadAverage
@@ -42,14 +24,23 @@ data class ServerHealth(
     companion object {
         val healthCache = HashMap<HealthCheckable, HealthStatus>()
     }
+
     @Serializable
     data class Memory(
-        val maxMem: Long = Runtime.getRuntime().maxMemory(),
-        val totalMemory: Long = Runtime.getRuntime().totalMemory(),
-        val freeMemory: Long = Runtime.getRuntime().freeMemory(),
-        val systemAllocated: Long = totalMemory - freeMemory,
-        val memUsagePercent: Float = (((systemAllocated.toFloat() / maxMem.toFloat() * 100f) * 100).toInt()) / 100f
-    )
+        val maxMem: Long,
+        val totalMemory: Long,
+        val freeMemory: Long,
+        val systemAllocated: Long,
+        val memUsagePercent: Float,
+    ) {
+        constructor() : this(
+            maxMem = Runtime.getRuntime().maxMemory(),
+            totalMemory = Runtime.getRuntime().totalMemory(),
+            freeMemory = Runtime.getRuntime().freeMemory(),
+            systemAllocated = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory(),
+            memUsagePercent = ((((Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()).toFloat() / Runtime.getRuntime().maxMemory().toFloat() * 100f) * 100).toInt()) / 100f,
+        )
+    }
 }
 
 /**
@@ -59,17 +50,16 @@ data class ServerHealth(
  * @param path The path you wish the endpoint to be at.
  * @param features A list of `HealthCheckable` features that you want reports on.
  */
-context(ServerBuilder)
-inline fun <reified USER> ServerPath.healthCheck(crossinline allowed: suspend (USER)->Boolean = { true }) {
+inline fun <reified USER> ServerBuilder.Path.healthCheck(crossinline allowed: suspend (USER) -> Boolean = { true }) {
     get.typed(
         summary = "Get Server Health",
         description = "Gets the current status of the server",
         errorCases = listOf(),
         implementation = { user: USER, _: Unit ->
-            if(!allowed(user)) throw ForbiddenException()
+            if (!allowed(user)) throw ForbiddenException()
             val now = Instant.now()
             ServerHealth(
-                features = server.requirements
+                features = server.resources
                     .asSequence()
                     .map { it() }
                     .filterIsInstance<HealthCheckable>()

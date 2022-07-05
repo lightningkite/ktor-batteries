@@ -4,7 +4,7 @@ import kotlin.reflect.KClass
 import kotlin.reflect.KType
 import kotlin.reflect.typeOf
 
-interface Database {
+interface Database: HealthCheckable {
     fun <T: Any> collection(type: KType, name: String): FieldCollection<T>
     companion object
 }

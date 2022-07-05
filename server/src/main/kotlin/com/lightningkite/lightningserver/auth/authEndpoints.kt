@@ -12,17 +12,15 @@ import com.lightningkite.lightningserver.exceptions.NotFoundException
 import com.lightningkite.lightningserver.exceptions.UnauthorizedException
 import com.lightningkite.lightningserver.http.*
 import com.lightningkite.lightningserver.routes.docName
-import com.lightningkite.lightningserver.serialization.Serialization
+import com.lightningkite.lightningserver.serialization.serializerOrContextual
 import com.lightningkite.lightningserver.typed.typed
 import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.serializer
+import kotlinx.serialization.builtins.serializer
 import kotlin.reflect.typeOf
+import kotlin.reflect.*
 
-context(ServerRunner)
-inline fun <reified T> JwtSigner.jwt(request: HttpRequest, ): T? = jwt(request, serializer())
-context(ServerRunner)
+inline fun <reified T> JwtSigner.jwt(request: HttpRequest): T? = jwt(request, serializerOrContextual())
 fun <T> JwtSigner.jwt(request: HttpRequest, serializer: KSerializer<T>): T? =
     (request.headers[HttpHeader.Authorization]?.removePrefix("Bearer ") ?: request.headers.cookies[HttpHeader.Authorization]?.removePrefix("Bearer "))?.let {
         try {
@@ -51,23 +49,49 @@ fun <T> JwtSigner.jwt(request: HttpRequest, serializer: KSerializer<T>): T? =
  * @param template A lambda to return what the email to send will be given the email and the login link.
  */
 
-context(ServerBuilder)
-inline fun <reified USER, reified ID : Comparable<ID>> ServerPath.authEndpoints(
-    crossinline onNewUser: suspend (email: String) -> USER? = { null },
+inline fun <reified USER, reified ID : Comparable<ID>> ServerBuilder.Path.authEndpoints(
     landing: String = "/",
     database: DatabaseRequirement = Database.default,
     emailSubject: String = "Log In",
-    noinline template: (suspend ServerRunner.(email: String, link: String) -> String) = HtmlDefaults.defaultLoginEmailTemplate
+    noinline template: (suspend ServerRunner.(email: String, link: String) -> String) = HtmlDefaults.defaultLoginEmailTemplate,
+    noinline onNewUser: suspend (email: String) -> USER? = { null },
+): ServerPath where USER : HasEmail, USER : HasId<ID> = authEndpoints(
+    authInfo = AuthInfo<USER>(),
+    idType = serializerOrContextual<ID>(),
+    userType = typeOf<USER>(),
+    userTypeName = USER::class.simpleName!!,
+    onNewUser = onNewUser,
+    landing = landing,
+    database = database,
+    emailSubject = emailSubject,
+    template = template,
+)
+
+fun <USER, ID : Comparable<ID>> ServerBuilder.Path.authEndpoints(
+    idType: KSerializer<ID>,
+    userType: KType,
+    userTypeName: String,
+    authInfo: AuthInfo<USER>,
+    onNewUser: suspend (email: String) -> USER? = { null },
+    landing: String = "/",
+    database: DatabaseRequirement = Database.default,
+    emailSubject: String = "Log In",
+    template: (suspend ServerRunner.(email: String, link: String) -> String) = HtmlDefaults.defaultLoginEmailTemplate
 ): ServerPath where USER : HasEmail, USER : HasId<ID> {
-    require(database)
+    builder.require(database)
+    @Suppress("UNCHECKED_CAST")
     return authEndpoints(
+        idType = idType,
+        userType = serializerOrContextual<USER>(userType),
+        authInfo = authInfo,
         userId = { it._id },
         userById = {
-            database().collection<USER>().get(it)!!
+            database().collection<USER>(userType, userTypeName).get(it)
         },
         userByEmail = {
-            database().collection<USER>().find(Condition.OnField(HasEmailFields.email<USER>(), Condition.Equal(it)))
-                .singleOrNull() ?: onNewUser(it)?.let { database().collection<USER>().insertOne(it) }
+            database().collection<USER>(userType, userTypeName)
+                .find(Condition.OnField(HasEmailFields.email<USER>(), Condition.Equal(it)))
+                .singleOrNull() ?: onNewUser(it)?.let { database().collection<USER>(userType, userTypeName).insertOne(it) }
             ?: throw NotFoundException()
         },
         landing = landing,
@@ -89,30 +113,51 @@ inline fun <reified USER, reified ID : Comparable<ID>> ServerPath.authEndpoints(
  * @param emailSubject The subject of the login emails that will be sent out.
  * @param template A lambda to return what the email to send will be given the email and the login link.
  */
-context(ServerBuilder)
-inline fun <reified USER: Any, reified ID> ServerPath.authEndpoints(
-    crossinline userId: ServerRunner.(user: USER) -> ID,
-    crossinline userById: suspend ServerRunner.(id: ID) -> USER,
-    crossinline userByEmail: suspend ServerRunner.(email: String) -> USER,
+        inline fun <reified USER : Any, reified ID> ServerBuilder.Path.authEndpoints(
+    noinline userId: ServerRunner.(user: USER) -> ID,
+    noinline userById: suspend ServerRunner.(id: ID) -> USER?,
+    noinline userByEmail: suspend ServerRunner.(email: String) -> USER,
     landing: String = "/",
     emailSubject: String = "Log In",
     noinline template: (suspend ServerRunner.(email: String, link: String) -> String) = HtmlDefaults.defaultLoginEmailTemplate
-): ServerPath {
-    val signer = require(JwtSigner.default)
-    require(email)
-//    Http.authorizationMethod = {
-//        it.jwt<ID>()?.let { userById(it) }
-//    }
-//    WebSockets.authorizationMethod = {
-//        it.queryParameter("jwt")?.let { AuthSettings.instance.verify<ID>(it) }?.let { userById(it) }
-//    }
+): ServerPath = authEndpoints(
+    authInfo = AuthInfo(),
+    idType = serializerOrContextual(),
+    userType = serializerOrContextual(),
+    userId = userId,
+    userById = userById,
+    userByEmail = userByEmail,
+    landing = landing,
+    emailSubject = emailSubject,
+    template = template,
+)
 
-    docName = "Auth"
-    val landingRoute: HttpRoute = get("login-landing")
-    landingRoute.handler = { call ->
+fun <USER : Any, ID> ServerBuilder.Path.authEndpoints(
+    idType: KSerializer<ID>,
+    userType: KSerializer<USER>,
+    authInfo: AuthInfo<USER>,
+    userId: ServerRunner.(user: USER) -> ID,
+    userById: suspend ServerRunner.(id: ID) -> USER?,
+    userByEmail: suspend ServerRunner.(email: String) -> USER,
+    landing: String = "/",
+    emailSubject: String = "Log In",
+    template: (suspend ServerRunner.(email: String, link: String) -> String) = HtmlDefaults.defaultLoginEmailTemplate
+): ServerPath = with(builder) {
+    require(JwtSignSettings.default)
+    require(email)
+    authorizationMethod = {
+        signer().jwt<ID>(it, idType)?.let { userById(it) }
+    }
+    wsAuthorizationMethod = {
+        it.queryParameter("jwt")?.let { signer().verify<ID>(idType, it) }?.let { userById(it) }
+    }
+
+    path.docName = "Auth"
+    val landingEndpoint: ServerBuilder.Endpoint = get("login-landing")
+    landingEndpoint.handler { call ->
         val token = call.queryParameter("jwt")!!
         HttpResponse.redirectToGet(
-            to = call.queryParameter("destination") ?: publicUrl + landing,
+            to = publicUrl + (call.queryParameter("destination") ?: landing),
             headers = {
                 setCookie(HttpHeader.Authorization, token)
             }
@@ -124,8 +169,9 @@ inline fun <reified USER: Any, reified ID> ServerPath.authEndpoints(
         errorCases = listOf(),
         successCode = HttpStatus.NoContent,
         implementation = { user: Unit, address: String ->
-            val jwt = signer().token(userByEmail(address).let { userId(it) }, signer().emailExpirationMilliseconds)
-            val link = "${publicUrl}${landingRoute.path}?jwt=$jwt"
+            val jwt =
+                signer().token(idType, userByEmail(address).let { userId(it) }, JwtSignSettings.default().emailExpirationMilliseconds)
+            val link = "${publicUrl}${landingEndpoint.route.path}?jwt=$jwt"
             email().send(
                 subject = emailSubject,
                 to = listOf(address),
@@ -136,21 +182,27 @@ inline fun <reified USER: Any, reified ID> ServerPath.authEndpoints(
         }
     )
     get("refresh-token").typed(
+        inputType = Unit.serializer(),
+        outputType = String.serializer(),
+        authInfo = authInfo,
         summary = "Refresh token",
         description = "Retrieves a new token for the user.",
         errorCases = listOf(),
         implementation = { user: USER, input: Unit ->
-            signer().token(user.let { userId(it) })
+            signer().token(idType, user.let { userId(it) })
         }
     )
     get("self").typed(
+        inputType = Unit.serializer(),
+        outputType = userType,
+        authInfo = authInfo,
         summary = "Get Self",
         description = "Retrieves the user that you currently are",
         errorCases = listOf(),
         implementation = { user: USER, _: Unit -> user }
     )
-    oauthGoogle(landingRoute = landingRoute) { userByEmail(it).let { userId(it) }.toString() }
-    oauthGithub(landingRoute = landingRoute) { userByEmail(it).let { userId(it) }.toString() }
-    oauthApple(landingRoute = landingRoute) { userByEmail(it).let { userId(it) }.toString() }
-    return this
+    oauthGoogle(landingRoute = landingEndpoint.route) { userByEmail(it).let { userId(it) }.toString() }
+    oauthGithub(landingRoute = landingEndpoint.route) { userByEmail(it).let { userId(it) }.toString() }
+    oauthApple(landingRoute = landingEndpoint.route) { userByEmail(it).let { userId(it) }.toString() }
+    return path
 }

@@ -2,43 +2,25 @@
 
 package com.lightningkite.lightningserver.demo
 
-import com.lightningkite.lightningserver.auth.*
-import com.lightningkite.lightningserver.client
-import com.lightningkite.lightningserver.db.*
-import com.lightningkite.lightningserver.email.EmailSettings
-import com.lightningkite.lightningserver.exceptions.ExceptionSettings
-import com.lightningkite.lightningserver.files.FilesSettings
-import com.lightningkite.lightningserver.logging.LoggingSettings
-import com.lightningkite.lightningserver.mongo.MongoSettings
-import com.lightningkite.lightningserver.mongo.mongoDb
-import com.lightningkite.lightningserver.serialization.Serialization
-import com.lightningkite.lightningserver.settings.GeneralServerSettings
-import com.lightningkite.lightningserver.settings.loadSettings
-import com.lightningkite.lightningserver.typed.*
 import com.lightningkite.lightningdb.*
-import com.lightningkite.lightningserver.core.routing
-import com.lightningkite.lightningserver.http.Http
-import com.lightningkite.lightningserver.http.get
-import com.lightningkite.lightningserver.http.handler
-import com.lightningkite.lightningserver.ktor.runServer
+import com.lightningkite.lightningserver.auth.authEndpoints
+import com.lightningkite.lightningserver.buildServer
+import com.lightningkite.lightningserver.core.ContentType
+import com.lightningkite.lightningserver.db.adminPages
+import com.lightningkite.lightningserver.db.default
+import com.lightningkite.lightningserver.db.restApi
+import com.lightningkite.lightningserver.http.HttpContent
+import com.lightningkite.lightningserver.http.HttpResponse
+import com.lightningkite.lightningserver.http.HttpStatus
+import com.lightningkite.lightningserver.ktor.KtorRunner
+import com.lightningkite.lightningserver.logging.LoggingSettings
+import com.lightningkite.lightningserver.pubsub.LocalPubSub
 import com.lightningkite.lightningserver.serverhealth.healthCheck
-import io.ktor.client.*
-import io.ktor.client.call.*
-import io.ktor.client.request.*
-import io.ktor.client.request.forms.*
-import io.ktor.server.application.*
-import io.ktor.server.auth.*
-import io.ktor.server.auth.Principal
-import io.ktor.server.plugins.*
-import io.ktor.server.plugins.callloging.*
-import io.ktor.server.plugins.statuspages.*
-import io.ktor.server.response.*
-import io.ktor.server.routing.*
-import io.ktor.server.websocket.*
-import io.ktor.util.*
-import kotlinx.serialization.*
+import com.lightningkite.lightningserver.typed.apiHelp
+import com.lightningkite.lightningserver.typed.typed
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseContextualSerialization
 import java.io.File
-import java.lang.Exception
 import java.time.Instant
 import java.util.*
 
@@ -60,35 +42,19 @@ data class User(
     override val email: String
 ) : HasId<UUID>, HasEmail
 
-val TestModel.Companion.table get() = database.collection<TestModel>("TestModel")
-
-@Serializable
-data class Settings(
-    val general: GeneralServerSettings = GeneralServerSettings(),
-    val auth: AuthSettings = AuthSettings(),
-    val files: FilesSettings = FilesSettings(),
-    val logging: LoggingSettings = LoggingSettings(),
-    val database: DatabaseSettings = DatabaseSettings(),
-    val email: EmailSettings = EmailSettings(),
-    val exception: ExceptionSettings = ExceptionSettings(),
-)
-
-fun main(vararg args: String) {
-    loadSettings(File("settings.yaml")) { Settings() }
-    println("Settings loaded")
-    prepareModels()
+val server = buildServer {
+    val database = require(Database.default)
     routing {
+        path("auth").authEndpoints { User(email = it) }
         path("test-model") {
-            path("rest").restApi { user: User? -> TestModel.table }
-            path("admin").adminPages(::TestModel) { user: User? -> TestModel.table }
+            path("rest").restApi { user: User? -> database().collection<TestModel>() }
+            path("admin").adminPages(::TestModel) { user: User? -> database().collection() }
+        }
+        get.handler {
+             HttpResponse.text("Hello ${it.let { authorizationMethod(it) }}")
         }
         path("docs").apiHelp()
-        path("health").healthCheck(listOf(
-            EmailSettings.instance,
-            ExceptionSettings.instance,
-            FilesSettings.instance,
-            DatabaseSettings.instance,
-        )) { user: Unit -> true }
+        path("health").healthCheck() { user: Unit -> true }
         path("test-primitive").get.typed(
             summary = "Get Test Primitive",
             errorCases = listOf(),
@@ -96,5 +62,11 @@ fun main(vararg args: String) {
         )
         path("die").get.handler { throw Exception("OUCH") }
     }
-    runServer()
+}
+
+fun main(vararg args: String) {
+    KtorRunner(
+        server = server,
+        configFile = File("./settings.yaml")
+    ).run()
 }

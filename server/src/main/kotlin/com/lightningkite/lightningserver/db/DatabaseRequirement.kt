@@ -4,6 +4,7 @@ import com.lightningkite.lightningdb.*
 import com.lightningkite.lightningserver.Server
 import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.serialization.Serialization
+import com.lightningkite.lightningserver.serialization.serializerOrContextual
 import com.mongodb.ConnectionString
 import com.mongodb.MongoClientSettings
 import kotlinx.serialization.KSerializer
@@ -49,7 +50,7 @@ data class DatabaseRequirement(override val name: String): Server.ResourceRequir
     }
 }
 val Database.Companion.default: DatabaseRequirement get() = database
-val database = DatabaseRequirement("database")
+private val database = DatabaseRequirement("database")
 
 class InMemoryDatabase(val serialization: Serialization, val premadeData: JsonObject? = null): Database {
     val collections = HashMap<String, FieldCollection<*>>()
@@ -58,11 +59,13 @@ class InMemoryDatabase(val serialization: Serialization, val premadeData: JsonOb
             = collections.getOrPut(name) {
         val made = InMemoryFieldCollection<T>()
         premadeData?.get(name)?.let {
-            val data = serialization.json.decodeFromJsonElement(ListSerializer(serialization.json.serializersModule.serializer(type) as KSerializer<T>), it)
+            val data = serialization.json.decodeFromJsonElement(ListSerializer(serializerOrContextual<T>(type)), it)
             made.data.addAll(data)
         }
         made
     } as FieldCollection<T>
+
+    override suspend fun healthCheck(): HealthStatus = HealthStatus(HealthStatus.Level.OK)
 }
 
 class InMemoryUnsafePersistenceDatabase(val serialization: Serialization, val folder: File): Database {
@@ -73,6 +76,8 @@ class InMemoryUnsafePersistenceDatabase(val serialization: Serialization, val fo
     @Suppress("UNCHECKED_CAST")
     override fun <T : Any> collection(type: KType, name: String): FieldCollection<T>
             = collections.getOrPut(name) {
-        InMemoryUnsafePersistentFieldCollection(serialization.json, serialization.json.serializersModule.serializer(type) as KSerializer<T>, folder.resolve(name))
+        InMemoryUnsafePersistentFieldCollection(serialization.json, serializerOrContextual<T>(type), folder.resolve(name))
     } as FieldCollection<T>
+
+    override suspend fun healthCheck(): HealthStatus = HealthStatus(HealthStatus.Level.OK)
 }

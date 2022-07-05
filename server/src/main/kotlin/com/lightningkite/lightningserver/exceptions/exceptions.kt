@@ -4,6 +4,8 @@ import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.core.ContentType
 import com.lightningkite.lightningserver.http.*
 import com.lightningkite.lightningserver.http.HttpHeaders
+import com.lightningkite.lightningserver.serialization.Serialization
+import com.lightningkite.lightningserver.serialization.serializerOrContextual
 import com.lightningkite.lightningserver.serialization.toHttpContent
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.serializer
@@ -16,16 +18,14 @@ open class HttpStatusException(
     cause: Throwable? = null
 ): Exception("$status: ${body?.data}", cause) {
     class Body<T>(val data: T, val serializer: KSerializer<T>) {
-        context(ServerRunner)
-        suspend fun toHttpContent(acceptedTypes: List<ContentType>): HttpContent? = data.toHttpContent(acceptedTypes, serializer)
+        suspend fun toHttpContent(serialization: Serialization, acceptedTypes: List<ContentType>): HttpContent? = data.toHttpContent(serialization, acceptedTypes, serializer)
     }
     companion object {
-        inline fun <reified T> toBody(value: T): Body<T> = Body(value, serializer())
+        inline fun <reified T> toBody(value: T): Body<T> = Body(value, serializerOrContextual())
     }
-    context(ServerRunner)
-    suspend fun toResponse(request: HttpRequest): HttpResponse = HttpResponse(
+    suspend fun toResponse(serialization: Serialization, request: HttpRequest): HttpResponse = HttpResponse(
         status = status,
-        body = body?.toHttpContent(request.headers.accept)
+        body = body?.toHttpContent(serialization, request.headers.accept)
     )
 }
 

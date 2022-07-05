@@ -1,20 +1,15 @@
 package com.lightningkite.lightningserver.serialization
 
+import com.lightningkite.lightningdb.*
 import com.lightningkite.lightningserver.SetOnce
-import com.lightningkite.lightningserver.auth.AuthSettings
-import com.lightningkite.lightningserver.db.database
-import com.lightningkite.lightningserver.email.EmailSettings
-import com.lightningkite.lightningserver.exceptions.ExceptionSettings
-import com.lightningkite.lightningserver.files.FilesSettings
 import com.lightningkite.lightningserver.logging.LoggingSettings
-import com.lightningkite.lightningserver.settings.GeneralServerSettings
-import com.lightningkite.lightningdb.ClientModule
-import com.lightningkite.lightningdb.HasEmail
-import com.lightningkite.lightningdb.HasId
-import com.lightningkite.lightningdb.collection
+import com.lightningkite.lightningserver.ServerBuilder
+import com.lightningkite.lightningserver.TestServerRunner
+import com.lightningkite.lightningserver.auth.ConfigureAuthKtTest
+import com.lightningkite.lightningserver.auth.signer
+import com.lightningkite.lightningserver.buildServer
 import com.lightningkite.lightningserver.core.ContentType
 import com.lightningkite.lightningserver.core.ServerPath
-import com.lightningkite.lightningserver.core.routing
 import com.lightningkite.lightningserver.http.*
 import com.lightningkite.lightningserver.http.HttpHeaders
 import com.lightningkite.lightningserver.typed.typed
@@ -34,65 +29,40 @@ class CorrectErrorTest {
     data class TestModel(
         val number: Int = 0
     )
+
+    val server = buildServer {
+        routing {
+            post("test").typed(
+                summary = "Test endpoint",
+                errorCases = listOf(),
+                implementation = { user: Unit, input: TestModel -> input }
+            )
+            get("soomething").handler {
+                HttpResponse()
+            }
+        }
+    }
+
     @Test fun testBadRequest() {
-        SetOnce.allowOverwrite {
-            GeneralServerSettings()
-        }
-        val t = ServerPath("test").post.typed(
-            summary = "Test endpoint",
-            errorCases = listOf(),
-            implementation = { user: Unit, input: TestModel -> input }
-        )
-        runBlocking {
-            t.test(
-                body = HttpContent.Text("""{"number": 2}""", ContentType.Application.Json),
-                headers = HttpHeaders(HttpHeader.Accept to ContentType.Application.Json.toString())
-            ).let {
-                assertEquals(HttpStatus.OK, it.status)
-                assertEquals(TestModel(number = 2), it.body?.parse())
-            }
-            t.test(
-                body = HttpContent.Text("""{"number": "asdf"}""", ContentType.Application.Json),
-                headers = HttpHeaders(HttpHeader.Accept to ContentType.Application.Json.toString())
-            ).let {
-                assertEquals(HttpStatus.BadRequest, it.status)
-                println(it.body?.text())
+        with(TestServerRunner(server)) {
+            runBlocking {
+                test(
+                    route = ServerPath("test").post,
+                    body = HttpContent.Text("""{"number": 2}""", ContentType.Application.Json),
+                    headers = HttpHeaders(HttpHeader.Accept to ContentType.Application.Json.toString())
+                ).let {
+                    assertEquals(HttpStatus.OK, it.status)
+                    assertEquals(TestModel(number = 2), it.body?.parse(this@with))
+                }
+                test(
+                    route = ServerPath("test").post,
+                    body = HttpContent.Text("""{"number": "asdf"}""", ContentType.Application.Json),
+                    headers = HttpHeaders(HttpHeader.Accept to ContentType.Application.Json.toString())
+                ).let {
+                    assertEquals(HttpStatus.BadRequest, it.status)
+                    println(it.body?.text())
+                }
             }
         }
-//        testApplication {
-//            application {
-//                configureSerialization()
-//                this.routing {
-//                    post(
-//                        path = "test",
-//                        summary = "Test endpoint",
-//                        errorCases = listOf(),
-//                        implementation = { input: TestModel -> input }
-//                    )
-//                }
-//            }
-//            val client = createClient {
-//                this.expectSuccess = false
-//                install(ContentNegotiation) {
-//                    json(Json {
-//                        serializersModule = ClientModule
-//                    })
-//                }
-//            }
-//            val correct = client.post("/test") {
-//                setBody(buildJsonObject { put("number", 2) })
-//                contentType(ContentType.Application.Json)
-//                accept(ContentType.Application.Json)
-//                println(headers.entries().joinToString())
-//            }
-//            assertTrue(correct.status.isSuccess())
-//            val wrong = client.post("/test") {
-//                setBody(buildJsonObject { put("number", "wrongo") })
-//                contentType(ContentType.Application.Json)
-//                accept(ContentType.Application.Json)
-//                println(headers.entries().joinToString())
-//            }
-//            assertFalse(wrong.status.isSuccess())
-//        }
     }
 }

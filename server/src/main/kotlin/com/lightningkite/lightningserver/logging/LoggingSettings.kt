@@ -10,6 +10,7 @@ import ch.qos.logback.core.rolling.RollingFileAppender
 import ch.qos.logback.core.rolling.TimeBasedRollingPolicy
 import com.lightningkite.lightningserver.Server
 import com.lightningkite.lightningserver.SettingSingleton
+import com.lightningkite.lightningserver.serialization.serializerOrContextual
 import kotlinx.serialization.Serializable
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -30,18 +31,18 @@ data class LoggingSettings(
     val logger: Map<String, LogLevel>? = null
 ) {
     companion object {
-        val setting = Server.Setting("logging", serializer()) { LoggingSettings() }
+        val setting = Server.Setting("logging", serializerOrContextual()) { LoggingSettings() }
     }
 
     @Serializable
-    enum class LogLevel(val level:Level) {
-        OFF(Level.OFF),
-        ERROR(Level.ERROR),
-        WARN(Level.WARN),
-        INFO(Level.INFO),
-        DEBUG(Level.DEBUG),
-        TRACE(Level.TRACE),
-        ALL(Level.ALL),
+    enum class LogLevel() {
+        OFF,
+        ERROR,
+        WARN,
+        INFO,
+        DEBUG,
+        TRACE,
+        ALL
     }
 
 //    @Serializable

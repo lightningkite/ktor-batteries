@@ -115,7 +115,6 @@ kotlin {
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     kotlinOptions.freeCompilerArgs += "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
     kotlinOptions.freeCompilerArgs += "-opt-in=kotlin.RequiresOptIn"
-    kotlinOptions.freeCompilerArgs += "-Xcontext-receivers"
 }
 
 

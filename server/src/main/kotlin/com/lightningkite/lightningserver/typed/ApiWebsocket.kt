@@ -11,6 +11,7 @@ import com.lightningkite.lightningserver.routes.docName
 import com.lightningkite.lightningserver.serialization.HasSerialization
 import com.lightningkite.lightningserver.serialization.Serialization
 import com.lightningkite.lightningserver.serialization.parse
+import com.lightningkite.lightningserver.serialization.serializerOrContextual
 import com.lightningkite.lightningserver.websocket.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
@@ -38,7 +39,6 @@ import kotlin.reflect.typeOf
 
 data class ApiWebsocket<USER, INPUT, OUTPUT>(
     override val path: ServerPath,
-    val auth: suspend ServerRunner.(WebSocketConnectEvent)->Any?,
     override val authInfo: AuthInfo<USER>,
     val inputType: KSerializer<INPUT>,
     val outputType: KSerializer<OUTPUT>,
@@ -46,9 +46,9 @@ data class ApiWebsocket<USER, INPUT, OUTPUT>(
     override val description: String = summary,
     val errorCases: List<ErrorCase>,
     val routeTypes: Map<String, KSerializer<*>> = mapOf(),
-    val connect: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(TypedConnectEvent<USER>) -> Unit,
-    val message: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(TypedMessageEvent<INPUT>) -> Unit,
-    val disconnect: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(WebSocketDisconnectEvent) -> Unit,
+    val connect: suspend ServerRunner.(ApiWebsocket<USER, INPUT, OUTPUT>, TypedConnectEvent<USER>) -> Unit,
+    val message: suspend ServerRunner.(ApiWebsocket<USER, INPUT, OUTPUT>, TypedMessageEvent<INPUT>) -> Unit,
+    val disconnect: suspend ServerRunner.(ApiWebsocket<USER, INPUT, OUTPUT>, WebSocketDisconnectEvent) -> Unit,
 ) : Documentable, WebSocketHandler {
 
     data class TypedConnectEvent<USER>(val user: USER, val id: String)
@@ -57,7 +57,7 @@ data class ApiWebsocket<USER, INPUT, OUTPUT>(
     data class ErrorCase(val closeReason: WebSocketClose, val internalCode: Int, val description: String)
 
     override suspend fun ServerRunner.connect(event: WebSocketConnectEvent) {
-        connect.invoke(this, this@ApiWebsocket, TypedConnectEvent(authInfo.checker(auth(event)), event.id))
+        connect.invoke(this, this@ApiWebsocket, TypedConnectEvent(authInfo.checker(server.wsAuthorizationMethod(this, event)), event.id))
     }
 
     override suspend fun ServerRunner.message(event: WebSocketMessageEvent) {
@@ -72,19 +72,18 @@ data class ApiWebsocket<USER, INPUT, OUTPUT>(
     suspend fun ServerRunner.send(id: String, content: OUTPUT) = sendWebSocket(id, serialization.json.encodeToString(outputType, content))
 }
 
-context(ServerBuilder)
 @LightningServerDsl
-inline fun <reified USER, reified INPUT, reified OUTPUT> ServerPath.typedWebsocket(
+inline fun <reified USER, reified INPUT, reified OUTPUT> ServerBuilder.Path.typedWebsocket(
     summary: String,
     description: String = summary,
     errorCases: List<ApiWebsocket.ErrorCase>,
-    noinline connect: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(ApiWebsocket.TypedConnectEvent<USER>) -> Unit,
-    noinline message: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(ApiWebsocket.TypedMessageEvent<INPUT>) -> Unit,
-    noinline disconnect: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(WebSocketDisconnectEvent) -> Unit,
+    noinline connect: suspend ServerRunner.(ApiWebsocket<USER, INPUT, OUTPUT>, ApiWebsocket.TypedConnectEvent<USER>) -> Unit,
+    noinline message: suspend ServerRunner.(ApiWebsocket<USER, INPUT, OUTPUT>, ApiWebsocket.TypedMessageEvent<INPUT>) -> Unit,
+    noinline disconnect: suspend ServerRunner.(ApiWebsocket<USER, INPUT, OUTPUT>, WebSocketDisconnectEvent) -> Unit,
 ): ApiWebsocket<USER, INPUT, OUTPUT> = typedWebsocket(
     authInfo = AuthInfo(),
-    inputType = serializer(),
-    outputType = serializer(),
+    inputType = serializerOrContextual(),
+    outputType = serializerOrContextual(),
     summary = summary,
             description = description,
             errorCases = errorCases,
@@ -93,22 +92,20 @@ inline fun <reified USER, reified INPUT, reified OUTPUT> ServerPath.typedWebsock
             disconnect = disconnect,
 )
 
-context(ServerBuilder)
 @LightningServerDsl
-fun <USER, INPUT, OUTPUT> ServerPath.typedWebsocket(
+fun <USER, INPUT, OUTPUT> ServerBuilder.Path.typedWebsocket(
     authInfo: AuthInfo<USER>,
     inputType: KSerializer<INPUT>,
     outputType: KSerializer<OUTPUT>,
     summary: String,
     description: String = summary,
     errorCases: List<ApiWebsocket.ErrorCase>,
-    connect: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(ApiWebsocket.TypedConnectEvent<USER>) -> Unit,
-    message: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(ApiWebsocket.TypedMessageEvent<INPUT>) -> Unit,
-    disconnect: suspend context(ServerRunner) ApiWebsocket<USER, INPUT, OUTPUT>.(WebSocketDisconnectEvent) -> Unit,
+    connect: suspend ServerRunner.(ApiWebsocket<USER, INPUT, OUTPUT>, ApiWebsocket.TypedConnectEvent<USER>) -> Unit,
+    message: suspend ServerRunner.(ApiWebsocket<USER, INPUT, OUTPUT>, ApiWebsocket.TypedMessageEvent<INPUT>) -> Unit,
+    disconnect: suspend ServerRunner.(ApiWebsocket<USER, INPUT, OUTPUT>, WebSocketDisconnectEvent) -> Unit,
 ): ApiWebsocket<USER, INPUT, OUTPUT> {
     val ws = ApiWebsocket(
-        path = this,
-        auth = wsAuthorizationMethod,
+        path = path,
         authInfo = authInfo,
         inputType = inputType,
         outputType = outputType,
@@ -119,44 +116,47 @@ fun <USER, INPUT, OUTPUT> ServerPath.typedWebsocket(
         message = message,
         disconnect = disconnect,
     )
-    this.webSocketHandler = ws
+    with(builder) {
+        path.webSocketHandler = ws
+    }
     return ws
 }
 
 data class TypedVirtualSocket<INPUT, OUTPUT>(val incoming: ReceiveChannel<OUTPUT>, val send: suspend (INPUT)->Unit)
-context(ServerRunner)
-suspend fun <USER, INPUT, OUTPUT> ApiWebsocket<USER, INPUT, OUTPUT>.test(
-    parts: Map<String, String> = mapOf(),
-    wildcard: String? = null,
-    queryParameters: List<Pair<String, String>> = listOf(),
-    headers: HttpHeaders = HttpHeaders.EMPTY,
-    domain: String = publicUrl.substringAfter("://").substringBefore("/"),
-    protocol: String = publicUrl.substringBefore("://"),
-    sourceIp: String = "0.0.0.0",
-    test: suspend TypedVirtualSocket<INPUT, OUTPUT>.()->Unit
-) {
-    this.path.test(
-        parts = parts,
-        wildcard = wildcard,
-        queryParameters = queryParameters,
-        headers = headers,
-        domain = domain,
-        protocol = protocol,
-        sourceIp = sourceIp,
-        test = {
-            val channel = Channel<OUTPUT>(20)
-            coroutineScope {
-                val job = launch {
-                    for(it in incoming) {
-                        channel.send(serialization.json.decodeFromString(outputType, it))
-                    }
-                }
-                test(TypedVirtualSocket<INPUT, OUTPUT>(
-                    incoming = channel,
-                    send = { send(serialization.json.encodeToString(inputType, it)) }
-                ))
-                job.cancelAndJoin()
-            }
-        },
-    )
-}
+
+//context(ServerRunner)
+//suspend fun <USER, INPUT, OUTPUT> ApiWebsocket<USER, INPUT, OUTPUT>.test(
+//    parts: Map<String, String> = mapOf(),
+//    wildcard: String? = null,
+//    queryParameters: List<Pair<String, String>> = listOf(),
+//    headers: HttpHeaders = HttpHeaders.EMPTY,
+//    domain: String = publicUrl.substringAfter("://").substringBefore("/"),
+//    protocol: String = publicUrl.substringBefore("://"),
+//    sourceIp: String = "0.0.0.0",
+//    test: suspend TypedVirtualSocket<INPUT, OUTPUT>.()->Unit
+//) {
+//    this.path.test(
+//        parts = parts,
+//        wildcard = wildcard,
+//        queryParameters = queryParameters,
+//        headers = headers,
+//        domain = domain,
+//        protocol = protocol,
+//        sourceIp = sourceIp,
+//        test = {
+//            val channel = Channel<OUTPUT>(20)
+//            coroutineScope {
+//                val job = launch {
+//                    for(it in incoming) {
+//                        channel.send(serialization.json.decodeFromString(outputType, it))
+//                    }
+//                }
+//                test(TypedVirtualSocket<INPUT, OUTPUT>(
+//                    incoming = channel,
+//                    send = { send(serialization.json.encodeToString(inputType, it)) }
+//                ))
+//                job.cancelAndJoin()
+//            }
+//        },
+//    )
+//}

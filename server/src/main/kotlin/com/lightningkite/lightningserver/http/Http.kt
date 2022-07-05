@@ -1,20 +1,21 @@
 package com.lightningkite.lightningserver.http
 
+import com.lightningkite.lightningserver.TestServerRunner
 import com.lightningkite.lightningserver.exceptions.HttpStatusException
-import com.lightningkite.lightningserver.serialization.toHttpContent
 
-suspend fun HttpRoute.test(
+suspend fun TestServerRunner.test(
+    route: HttpEndpoint,
     parts: Map<String, String> = mapOf(),
     wildcard: String? = null,
     queryParameters: List<Pair<String, String>> = listOf(),
     headers: HttpHeaders = HttpHeaders.EMPTY,
     body: HttpContent? = null,
-    domain: String = GeneralServerSettings.instance.publicUrl.substringAfter("://").substringBefore("/"),
-    protocol: String = GeneralServerSettings.instance.publicUrl.substringBefore("://"),
+    domain: String = "localhost",
+    protocol: String = "http",
     sourceIp: String = "0.0.0.0"
 ): HttpResponse {
     val req = HttpRequest(
-        route = this,
+        route = route,
         parts = parts,
         wildcard = wildcard,
         queryParameters = queryParameters,
@@ -25,8 +26,8 @@ suspend fun HttpRoute.test(
         sourceIp = sourceIp,
     )
     return try {
-        Http.routes[this]!!.invoke(req)
+        server.endpoints[route]!!.invoke(this@test, req)
     } catch(e: HttpStatusException) {
-        e.toResponse(req)
+        e.toResponse(serialization, req)
     }
 }

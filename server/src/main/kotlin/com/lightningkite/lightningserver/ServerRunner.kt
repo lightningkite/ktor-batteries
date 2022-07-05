@@ -2,6 +2,7 @@ package com.lightningkite.lightningserver
 
 import com.lightningkite.lightningserver.serialization.HasSerialization
 import com.lightningkite.lightningserver.serialization.Serialization
+import com.lightningkite.lightningserver.task.Task
 
 interface ServerRunner : HasSerialization {
     val server: Server
@@ -11,8 +12,8 @@ interface ServerRunner : HasSerialization {
     operator fun <T, S> Server.ResourceRequirement<T, S>.invoke(): T
     operator fun <T> Server.Setting<T>.invoke(): T
     suspend fun sendWebSocket(id: String, message: String)
+    operator fun <INPUT> Task<INPUT>.invoke(input: INPUT)
 }
-
 // goal syntax
 
 /*

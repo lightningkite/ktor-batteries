@@ -1,8 +1,6 @@
 package com.lightningkite.lightningserver.email
 
 import com.lightningkite.lightningserver.SettingSingleton
-import com.lightningkite.lightningserver.serverhealth.HealthCheckable
-import com.lightningkite.lightningserver.serverhealth.HealthStatus
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import java.io.BufferedReader

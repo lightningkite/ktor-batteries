@@ -1,7 +1,6 @@
 package com.lightningkite.lightningserver.jsonschema
 
-import com.lightningkite.lightningserver.jsonschema.internal.JsonSchemaDefinitions
-import com.lightningkite.lightningserver.jsonschema.internal.createJsonSchema
+import com.lightningkite.lightningserver.jsonschema.internal.ForJson
 import kotlinx.serialization.*
 import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.json.*
@@ -86,7 +85,7 @@ fun <T> Json.encodeWithSchema(serializer: SerializationStrategy<T>, value: T, ur
  * @param generateDefinitions Should this generate definitions by default
  */
 fun Json.encodeToSchema(descriptor: SerialDescriptor, generateDefinitions: Boolean = true): String {
-  return encodeToString(JsonObject.serializer(), buildJsonSchema(descriptor, generateDefinitions))
+  return encodeToString(JsonObject.serializer(), ForJson(this).buildJsonSchema(descriptor, generateDefinitions))
 }
 
 /**
@@ -100,26 +99,3 @@ fun Json.encodeToSchema(serializer: SerializationStrategy<*>, generateDefinition
   return encodeToSchema(serializer.descriptor, generateDefinitions)
 }
 
-/**
- * Creates a Json Schema using the provided [descriptor]
- *
- * @param autoDefinitions automatically generate definitions by default
- */
-fun buildJsonSchema(descriptor: SerialDescriptor, autoDefinitions: Boolean = false): JsonObject {
-  val prepend = mapOf("\$schema" to JsonPrimitive("http://json-schema.org/draft-07/schema"))
-  val definitions = JsonSchemaDefinitions(autoDefinitions)
-  val root = descriptor.createJsonSchema(descriptor.annotations, definitions)
-  val append = mapOf("definitions" to definitions.getDefinitionsAsJsonObject())
-
-  return JsonObject(prepend + root + append)
-}
-
-/**
- * Creates a Json Schema using the provided [serializer],
- * same as doing `jsonSchema(serializer.descriptor)`
- *
- * @param generateDefinitions Should this generate definitions by default
- */
-fun buildJsonSchema(serializer: SerializationStrategy<*>, generateDefinitions: Boolean = true): JsonObject {
-  return buildJsonSchema(serializer.descriptor, generateDefinitions)
-}

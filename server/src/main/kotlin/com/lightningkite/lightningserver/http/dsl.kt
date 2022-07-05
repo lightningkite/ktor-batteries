@@ -1,40 +1,32 @@
 package com.lightningkite.lightningserver.http
 
-import com.lightningkite.lightningserver.ServerBuilder
 import com.lightningkite.lightningserver.core.LightningServerDsl
 import com.lightningkite.lightningserver.core.ServerPath
 
 
 @LightningServerDsl
-val ServerPath.get: HttpRoute get() = HttpRoute(this, HttpMethod.GET)
+val ServerPath.get: HttpEndpoint get() = HttpEndpoint(this, HttpMethod.GET)
 @LightningServerDsl
-val ServerPath.post: HttpRoute get() = HttpRoute(this, HttpMethod.POST)
+val ServerPath.post: HttpEndpoint get() = HttpEndpoint(this, HttpMethod.POST)
 @LightningServerDsl
-val ServerPath.put: HttpRoute get() = HttpRoute(this, HttpMethod.PUT)
+val ServerPath.put: HttpEndpoint get() = HttpEndpoint(this, HttpMethod.PUT)
 @LightningServerDsl
-val ServerPath.patch: HttpRoute get() = HttpRoute(this, HttpMethod.PATCH)
+val ServerPath.patch: HttpEndpoint get() = HttpEndpoint(this, HttpMethod.PATCH)
 @LightningServerDsl
-val ServerPath.delete: HttpRoute get() = HttpRoute(this, HttpMethod.DELETE)
+val ServerPath.delete: HttpEndpoint get() = HttpEndpoint(this, HttpMethod.DELETE)
 @LightningServerDsl
-val ServerPath.head: HttpRoute get() = HttpRoute(this, HttpMethod.HEAD)
+val ServerPath.head: HttpEndpoint get() = HttpEndpoint(this, HttpMethod.HEAD)
 
 
 @LightningServerDsl
-fun ServerPath.get(path: String): HttpRoute = HttpRoute(this.path(path), HttpMethod.GET)
+fun ServerPath.get(path: String): HttpEndpoint = HttpEndpoint(this.path(path), HttpMethod.GET)
 @LightningServerDsl
-fun ServerPath.post(path: String): HttpRoute = HttpRoute(this.path(path), HttpMethod.POST)
+fun ServerPath.post(path: String): HttpEndpoint = HttpEndpoint(this.path(path), HttpMethod.POST)
 @LightningServerDsl
-fun ServerPath.put(path: String): HttpRoute = HttpRoute(this.path(path), HttpMethod.PUT)
+fun ServerPath.put(path: String): HttpEndpoint = HttpEndpoint(this.path(path), HttpMethod.PUT)
 @LightningServerDsl
-fun ServerPath.patch(path: String): HttpRoute = HttpRoute(this.path(path), HttpMethod.PATCH)
+fun ServerPath.patch(path: String): HttpEndpoint = HttpEndpoint(this.path(path), HttpMethod.PATCH)
 @LightningServerDsl
-fun ServerPath.delete(path: String): HttpRoute = HttpRoute(this.path(path), HttpMethod.DELETE)
+fun ServerPath.delete(path: String): HttpEndpoint = HttpEndpoint(this.path(path), HttpMethod.DELETE)
 @LightningServerDsl
-fun ServerPath.head(path: String): HttpRoute = HttpRoute(this.path(path), HttpMethod.HEAD)
-
-context(ServerBuilder)
-@LightningServerDsl
-fun HttpRoute.handler(handler: HttpHandler): HttpRoute {
-    this.handler = handler
-    return this
-}
+fun ServerPath.head(path: String): HttpEndpoint = HttpEndpoint(this.path(path), HttpMethod.HEAD)

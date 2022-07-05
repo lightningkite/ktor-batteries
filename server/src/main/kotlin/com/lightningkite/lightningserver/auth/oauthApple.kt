@@ -6,9 +6,8 @@ import com.lightningkite.lightningserver.Server
 import com.lightningkite.lightningserver.ServerBuilder
 import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.core.LightningServerDsl
-import com.lightningkite.lightningserver.core.ServerPath
 import com.lightningkite.lightningserver.exceptions.NotFoundException
-import com.lightningkite.lightningserver.http.HttpRoute
+import com.lightningkite.lightningserver.http.HttpEndpoint
 import io.ktor.server.plugins.*
 import io.ktor.server.routing.*
 import io.ktor.util.*
@@ -28,14 +27,13 @@ import java.util.*
  * @param defaultLanding The final page to send the user after authentication.
  * @param emailToId A lambda that returns the users ID given an email.
  */
-context(ServerBuilder)
 @LightningServerDsl
-fun ServerPath.oauthApple(
-    landingRoute: HttpRoute,
+fun ServerBuilder.Path.oauthApple(
+    landingRoute: HttpEndpoint,
     emailToId: suspend ServerRunner.(String) -> String
 ) {
     Security.addProvider(BouncyCastleProvider())
-    val settings = require(Server.Setting("oauth-apple", OauthProviderCredentials.serializer().nullable) { null })
+    val settings = builder.require(Server.Setting("oauth-apple", OauthProviderCredentials.serializer().nullable) { null })
     return oauth(
     landingRoute = landingRoute,
         niceName = "Apple",

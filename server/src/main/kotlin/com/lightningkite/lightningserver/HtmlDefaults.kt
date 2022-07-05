@@ -1,7 +1,5 @@
 package com.lightningkite.lightningserver
 
-import com.lightningkite.lightningserver.settings.GeneralServerSettings
-
 object HtmlDefaults {
     var basePage: ServerRunner.(content: String) -> String = { content ->
         """
@@ -9,7 +7,7 @@ object HtmlDefaults {
             <html>
               <head>
                 <meta charset="utf-8">
-                <title>${GeneralServerSettings.instance.projectName}</title>
+                <title>${server.name}</title>
               </head>
               <body>
                 $content
@@ -23,7 +21,7 @@ object HtmlDefaults {
             <html>
               <head>
                 <meta charset="utf-8">
-                <title>${GeneralServerSettings.instance.projectName}</title>
+                <title>${server.name}</title>
               </head>
               <body>
                 $content

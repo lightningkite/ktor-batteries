@@ -1,10 +1,10 @@
 package com.lightningkite.lightningserver.websocket
 
 import com.lightningkite.lightningserver.ServerRunner
+import com.lightningkite.lightningserver.TestServerRunner
 import com.lightningkite.lightningserver.core.ServerPath
 import com.lightningkite.lightningserver.exceptions.HttpStatusException
 import com.lightningkite.lightningserver.http.*
-import com.lightningkite.lightningserver.settings.GeneralServerSettings
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
@@ -33,19 +33,20 @@ interface WebSocketHandler {
 }
 
 data class VirtualSocket(val incoming: ReceiveChannel<String>, val send: suspend (String)->Unit)
-suspend fun ServerPath.test(
+suspend fun TestServerRunner.test(
+    path: ServerPath,
     parts: Map<String, String> = mapOf(),
     wildcard: String? = null,
     queryParameters: List<Pair<String, String>> = listOf(),
     headers: HttpHeaders = HttpHeaders.EMPTY,
-    domain: String = GeneralServerSettings.instance.publicUrl.substringAfter("://").substringBefore("/"),
-    protocol: String = GeneralServerSettings.instance.publicUrl.substringBefore("://"),
+    domain: String = publicUrl.substringAfter("://").substringBefore("/"),
+    protocol: String = publicUrl.substringBefore("://"),
     sourceIp: String = "0.0.0.0",
     test: suspend VirtualSocket.()->Unit
 ) {
     val id = "TEST-${UUID.randomUUID()}"
-    val req = WebSockets.ConnectEvent(
-        path = this,
+    val req = WebSocketConnectEvent(
+        path = path,
         parts = parts,
         wildcard = wildcard,
         queryParameters = queryParameters,
@@ -55,19 +56,20 @@ suspend fun ServerPath.test(
         sourceIp = sourceIp,
         id = id
     )
-    val h = WebSockets.handlers[this]!!
+    val h = server.websockets[path]!!
 
     val channel = Channel<String>(20)
-    val oldMethod = WebSockets.engineSendMethod
-    WebSockets.engineSendMethod = { id, content ->
-        println("$id <-- $content")
-        channel.send(content)
-    }
     coroutineScope {
         val connectHandle = async {
             println("Connecting $id...")
-            h.connect(req)
+            with(h) { connect(req) }
             println("Connected $id.")
+        }
+        val receiveHandler = async {
+            pubSub.string("ws-$id").collect {
+                println("Got $it")
+                channel.send(it)
+            }
         }
         val testHandle = async {
             test(
@@ -75,15 +77,15 @@ suspend fun ServerPath.test(
                     incoming = channel,
                     send = {
                         println("$id --> $it")
-                        h.message(WebSockets.MessageEvent(id, it))
+                        with(h) { message(WebSocketMessageEvent(id, it)) }
                     }
                 )
             )
             println("Disconnecting $id...")
-            h.disconnect(WebSockets.DisconnectEvent(id))
+            with(h) { disconnect(WebSocketDisconnectEvent(id)) }
             println("Disconnected $id.")
         }
         listOf(connectHandle, testHandle).awaitAll()
+        receiveHandler.cancelAndJoin()
     }
-    WebSockets.engineSendMethod = oldMethod
 }

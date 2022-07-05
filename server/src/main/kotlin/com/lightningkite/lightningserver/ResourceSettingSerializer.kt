@@ -1,12 +1,13 @@
 package com.lightningkite.lightningserver
 
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
 import kotlinx.serialization.encoding.*
 
 class ResourceSettingSerializer(val server: Server) : KSerializer<Map<Server.ResourceRequirement<*, *>, Any?>> {
-    val parts = server.requirements.toList()
+    val parts = server.resources.toList()
     override val descriptor: SerialDescriptor = buildClassSerialDescriptor(server.name + "ResourceSettings") {
         for (setting in parts) {
             element(setting.name, setting.serializer.descriptor, isOptional = true)
@@ -22,7 +23,7 @@ class ResourceSettingSerializer(val server: Server) : KSerializer<Map<Server.Res
                 if (index == CompositeDecoder.UNKNOWN_NAME) continue
                 val setting = parts[index]
                 @Suppress("UNCHECKED_CAST")
-                map[setting] = decodeSerializableElement(setting.serializer.descriptor, index, setting.serializer)
+                map[setting] = decodeSerializableElement(descriptor, index, setting.serializer)
             }
         }
         return map
@@ -33,7 +34,7 @@ class ResourceSettingSerializer(val server: Server) : KSerializer<Map<Server.Res
             for ((index, setting) in parts.withIndex()) {
                 @Suppress("UNCHECKED_CAST")
                 encodeSerializableElement(
-                    setting.serializer.descriptor,
+                    descriptor,
                     index,
                     setting.serializer as KSerializer<Any?>,
                     value[setting]

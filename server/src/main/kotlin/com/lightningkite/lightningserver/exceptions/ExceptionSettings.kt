@@ -7,8 +7,6 @@ import com.lightningkite.lightningserver.SetOnce
 import com.lightningkite.lightningserver.SettingSingleton
 import com.lightningkite.lightningserver.notifications.ConsoleNotificationInterface
 import com.lightningkite.lightningserver.notifications.FcmNotificationInterface
-import com.lightningkite.lightningserver.serverhealth.HealthCheckable
-import com.lightningkite.lightningserver.serverhealth.HealthStatus
 import com.lightningkite.lightningdb.Database
 import com.lightningkite.lightningserver.Server
 import com.lightningkite.lightningserver.ServerRunner
@@ -23,10 +21,9 @@ import java.io.File
 
 val sentryDsn = Server.Setting("sentryDsn", String.serializer().nullable) { null }
 
-context(ServerRunner)
-fun Throwable.report() {
+fun ServerRunner.report(throwable: Throwable) {
     sentryDsn()?.let {
-        Sentry.capture(this)
+        Sentry.capture(throwable)
     }
 }
 

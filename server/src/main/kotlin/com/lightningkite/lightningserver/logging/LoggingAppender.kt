@@ -1,5 +1,6 @@
 package com.lightningkite.lightningserver.logging
 
+import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.classic.encoder.PatternLayoutEncoder
 import ch.qos.logback.classic.spi.ILoggingEvent
@@ -19,11 +20,22 @@ object LoggingAppender: Server.ResourceRequirement<Appender<ILoggingEvent>, Stri
         get() = "logging"
     override val serializer: KSerializer<String>
         get() = String.serializer()
+
+    override fun default(): String = "console"
     override val name: String
         get() = "logging"
 
     override fun ServerRunner.fromExplicit(setting: String): Appender<ILoggingEvent> = when {
-        setting == "console" -> ConsoleAppender()
+        setting == "console" -> ConsoleAppender<ILoggingEvent>().apply {
+            context = LoggerFactory.getILoggerFactory() as LoggerContext
+            name = "Console"
+            encoder = PatternLayoutEncoder().apply {
+                context = LoggerFactory.getILoggerFactory() as LoggerContext
+                pattern = "%-12date{YYYY-MM-dd HH:mm:ss.SSS} %-5level %logger - %msg%n"
+                start()
+            }
+            start()
+        }
         setting.startsWith("file://") -> RollingFileAppender<ILoggingEvent>().apply rolling@{
                     context = LoggerFactory.getILoggerFactory() as LoggerContext
                     name = Logger.ROOT_LOGGER_NAME
@@ -56,4 +68,15 @@ fun ServerRunner.loggingSetup() {
     for (sub in (settings.logger ?: mapOf())) {
         logCtx.getLogger(sub.key).level = sub.value.level
     }
+}
+
+private val LoggingSettings.LogLevel.level: Level
+    get() = when(this) {
+    LoggingSettings.LogLevel.OFF -> Level.OFF
+    LoggingSettings.LogLevel.ERROR -> Level.ERROR
+    LoggingSettings.LogLevel.WARN -> Level.WARN
+    LoggingSettings.LogLevel.INFO -> Level.INFO
+    LoggingSettings.LogLevel.DEBUG -> Level.DEBUG
+    LoggingSettings.LogLevel.TRACE -> Level.TRACE
+    LoggingSettings.LogLevel.ALL -> Level.ALL
 }

@@ -1,10 +1,10 @@
 package com.lightningkite.lightningserver.typed
 
 import com.lightningkite.lightningserver.jsonschema.encodeToSchema
-import com.lightningkite.lightningserver.jsonschema.internal.createJsonSchema
 import com.lightningkite.lightningserver.serialization.Serialization
 import com.lightningkite.lightningdb.ServerFile
 import com.lightningkite.lightningserver.ServerRunner
+import com.lightningkite.lightningserver.serialization.serializerOrContextual
 import io.ktor.util.*
 import kotlinx.html.*
 import kotlinx.serialization.KSerializer
@@ -18,7 +18,6 @@ import kotlin.reflect.KType
 import kotlin.reflect.typeOf
 
 
-context(ServerRunner)
 fun HEAD.includeFormScript() {
     script { src = "https://cdn.jsdelivr.net/npm/@json-editor/json-editor@latest/dist/jsoneditor.min.js" }
 
@@ -46,16 +45,16 @@ fun HEAD.includeFormScript() {
     }
 }
 
-context(ServerRunner)
 @OptIn(InternalAPI::class)
 inline fun <reified T> FORM.insideHtmlForm(
+    serialization: Serialization,
     title: String,
     jsEditorName: String,
     defaultValue: T? = null,
     collapsed: Boolean = false,
-): Unit = insideHtmlForm(title, jsEditorName, serializer(), defaultValue, collapsed)
-context(ServerRunner)
+): Unit = insideHtmlForm(serialization, title, jsEditorName, serializerOrContextual(), defaultValue, collapsed)
 fun <T> FORM.insideHtmlForm(
+    serialization: Serialization,
     title: String,
     jsEditorName: String,
     serializer: KSerializer<T>,
@@ -67,6 +66,7 @@ fun <T> FORM.insideHtmlForm(
         id = "$jsEditorName-input"
     }
     jsForm(
+        serialization = serialization,
         title = title,
         jsEditorName = jsEditorName,
         serializer = serializer,
@@ -89,7 +89,7 @@ fun <T> FORM.insideHtmlForm(
         div {
             attributes.set("data-theme", "html")
             classes = setOf("je-indented-panel")
-            serializer.descriptor.fileFieldNames().forEach {
+            serializer.descriptor.fileFieldNames(serialization).forEach {
                 div {
                     classes = setOf("row")
                     label {
@@ -107,8 +107,7 @@ fun <T> FORM.insideHtmlForm(
     }
 }
 
-context(ServerRunner)
-internal fun SerialDescriptor.fileFieldNames(visited: MutableSet<SerialDescriptor> = mutableSetOf()): List<String> {
+internal fun SerialDescriptor.fileFieldNames(serialization: Serialization, visited: MutableSet<SerialDescriptor> = mutableSetOf()): List<String> {
     if(!visited.add(this)) return listOf()
     return (0 until elementsCount)
         .flatMap {
@@ -117,7 +116,7 @@ internal fun SerialDescriptor.fileFieldNames(visited: MutableSet<SerialDescripto
             if (descriptor.kind == SerialKind.CONTEXTUAL) {
                 descriptor = serialization.module.getContextualDescriptor(descriptor)!!
             }
-            descriptor.fileFieldNames(visited).map { "$name.$it" } + if (descriptor == serialization.module.getContextual(
+            descriptor.fileFieldNames(serialization, visited).map { "$name.$it" } + if (descriptor == serialization.module.getContextual(
                     ServerFile::class
                 )?.descriptor
             ) listOf(
@@ -126,16 +125,16 @@ internal fun SerialDescriptor.fileFieldNames(visited: MutableSet<SerialDescripto
         }
 }
 
-context(ServerRunner)
 inline fun <reified T> FlowContent.jsForm(
+    serialization: Serialization,
     title: String,
     jsEditorName: String,
     defaultValue: T? = null,
     collapsed: Boolean = false,
-) = jsForm(title, jsEditorName, serializer<T>(), defaultValue, collapsed)
+) = jsForm(serialization, title, jsEditorName, serializer<T>(), defaultValue, collapsed)
 
-context(ServerRunner)
 fun <T> FlowContent.jsForm(
+    serialization: Serialization,
     title: String,
     jsEditorName: String,
     serializer: KSerializer<T>,
@@ -166,16 +165,16 @@ fun <T> FlowContent.jsForm(
     }
 }
 
-context(ServerRunner)
 inline fun <reified T> FlowContent.display(
+    serialization: Serialization,
     title: String,
     jsEditorName: String,
     defaultValue: T? = null,
     collapsed: Boolean = false,
-) = displayUntyped(title, jsEditorName, serializer<T>(), defaultValue, collapsed)
+) = displayUntyped(serialization, title, jsEditorName, serializer<T>(), defaultValue, collapsed)
 
-context(ServerRunner)
 fun <T> FlowContent.displayUntyped(
+    serialization: Serialization,
     title: String,
     jsEditorName: String,
     serializer: KSerializer<T>,

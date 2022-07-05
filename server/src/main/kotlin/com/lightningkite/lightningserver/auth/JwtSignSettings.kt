@@ -8,17 +8,16 @@ import com.auth0.jwt.impl.PublicClaims
 import com.lightningkite.lightningserver.Server
 import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.exceptions.UnauthorizedException
-import com.lightningkite.lightningserver.serialization.Serialization
+import com.lightningkite.lightningserver.serialization.serializerOrContextual
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.serializer
 import java.security.SecureRandom
 import java.time.Duration
 import java.util.*
 
 @Serializable
-data class JwtSigner(
+data class JwtSignSettings(
     val expirationMilliseconds: Long? = Duration.ofDays(365).toMillis(),
     val emailExpirationMilliseconds: Long = Duration.ofHours(1).toMillis(),
     val secret: String = buildString {
@@ -31,34 +30,33 @@ data class JwtSigner(
     }
 ) {
     companion object {
-        val default: Server.Setting<JwtSigner> = Server.Setting("jwtSigner", serializer()) { JwtSigner() }
+        val default: Server.Setting<JwtSignSettings> = Server.Setting("jwtSigner", serializerOrContextual()) { JwtSignSettings() }
     }
+}
 
-    context(ServerRunner)
-    inline fun <reified T> token(subject: T, expireDuration: Long? = expirationMilliseconds): String = token(kotlinx.serialization.serializer(), subject, expireDuration)
-    context(ServerRunner)
-    fun <T> token(serializer: KSerializer<T>, subject: T, expireDuration: Long? = expirationMilliseconds): String = JWT.create()
-        .withAudience(publicUrl)
-        .withIssuer(publicUrl)
+fun ServerRunner.signer(settings: Server.Setting<JwtSignSettings> = JwtSignSettings.default) = JwtSigner(settings(), this)
+data class JwtSigner(val settings: JwtSignSettings, val runner: ServerRunner) {
+    inline fun <reified T> token(subject: T, expireDuration: Long? = settings.expirationMilliseconds): String = token(serializerOrContextual(), subject, expireDuration)
+    fun <T> token(serializer: KSerializer<T>, subject: T, expireDuration: Long? = settings.expirationMilliseconds): String = JWT.create()
+        .withAudience(runner.publicUrl)
+        .withIssuer(runner.publicUrl)
         .withIssuedAt(Date())
         .also {
             if (expireDuration != null)
                 it.withExpiresAt(Date(System.currentTimeMillis() + expireDuration))
         }
-        .withClaim(PublicClaims.SUBJECT, (serialization.json.encodeToJsonElement(serializer, subject) as JsonPrimitive).content)
-        .sign(Algorithm.HMAC256(secret))
+        .withClaim(PublicClaims.SUBJECT, (runner.serialization.json.encodeToJsonElement(serializer, subject) as JsonPrimitive).content)
+        .sign(Algorithm.HMAC256(settings.secret))
 
-    context(ServerRunner)
-    inline fun <reified T> verify(token: String): T = verify(kotlinx.serialization.serializer(), token)
-    context(ServerRunner)
+    inline fun <reified T> verify(token: String): T = verify(serializerOrContextual(), token)
     fun <T> verify(serializer: KSerializer<T>, token: String): T {
         return try {
             val v = JWT
-                .require(Algorithm.HMAC256(secret))
-                .withIssuer(publicUrl)
+                .require(Algorithm.HMAC256(settings.secret))
+                .withIssuer(runner.publicUrl)
                 .build()
                 .verify(token)
-            serialization.json.decodeFromJsonElement(serializer, JsonPrimitive(v.subject ?: v.getClaim("userId").asString()))
+            runner.serialization.json.decodeFromJsonElement(serializer, JsonPrimitive(v.subject ?: v.getClaim("userId").asString()))
         } catch (e: JWTVerificationException) {
             throw UnauthorizedException(
                 body = "Invalid token $token: ${e.message}",
@@ -72,6 +70,7 @@ data class JwtSigner(
         }
     }
 }
+
 
 private val availableCharacters =
     "0123456789qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM~!@#%^&*()_+`-=[]{};':,./<>?"

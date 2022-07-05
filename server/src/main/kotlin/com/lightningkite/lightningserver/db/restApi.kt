@@ -6,11 +6,14 @@ import io.ktor.http.*
 import io.ktor.server.routing.*
 import kotlinx.coroutines.flow.*
 import com.lightningkite.lightningdb.*
+import com.lightningkite.lightningserver.ServerBuilder
+import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.auth.AuthInfo
 import com.lightningkite.lightningserver.core.LightningServerDsl
 import com.lightningkite.lightningserver.core.ServerPath
 import com.lightningkite.lightningserver.http.*
 import com.lightningkite.lightningserver.serialization.Serialization
+import com.lightningkite.lightningserver.serialization.serializerOrContextual
 import io.ktor.server.auth.*
 import io.ktor.server.plugins.*
 import io.ktor.util.*
@@ -42,9 +45,9 @@ import kotlin.reflect.KProperty1
  * @param getCollection A lambda that returns the field collection for the model given the calls principal
  */
 @LightningServerDsl
-inline fun <reified USER, reified T : HasId<ID>, reified ID : Comparable<ID>> ServerPath.restApi(
-    noinline getCollection: suspend (principal: USER) -> FieldCollection<T>
-) = restApi(AuthInfo(), serializer(), serializer(), getCollection)
+inline fun <reified USER, reified T : HasId<ID>, reified ID : Comparable<ID>> ServerBuilder.Path.restApi(
+    noinline getCollection: suspend ServerRunner.(principal: USER) -> FieldCollection<T>
+) = restApi(AuthInfo(), serializerOrContextual(), serializerOrContextual(), getCollection)
 
 /**
  * Creates a Restful API for the model provided.
@@ -64,14 +67,14 @@ inline fun <reified USER, reified T : HasId<ID>, reified ID : Comparable<ID>> Se
  * @param getCollection A lambda that returns the field collection for the model given the calls principal
  */
 @LightningServerDsl
-fun <USER, T : HasId<ID>, ID : Comparable<ID>> ServerPath.restApi(
+fun <USER, T : HasId<ID>, ID : Comparable<ID>> ServerBuilder.Path.restApi(
     authInfo: AuthInfo<USER>,
     serializer: KSerializer<T>,
     idSerializer: KSerializer<ID>,
-    getCollection: suspend (principal: USER) -> FieldCollection<T>
+    getCollection: suspend ServerRunner.(principal: USER) -> FieldCollection<T>
 ) {
     val modelName = serializer.descriptor.serialName.substringBefore('<').substringAfterLast('.')
-    this.docName = modelName
+    path.docName = modelName
     get.typed(
         authInfo = authInfo,
         inputType = Query.serializer(serializer),

@@ -1,14 +1,15 @@
 package com.lightningkite.lightningserver.pubsub
 
+import com.lightningkite.lightningdb.HealthCheckable
+import com.lightningkite.lightningdb.HealthStatus
 import com.lightningkite.lightningserver.cache.set
 import com.lightningkite.lightningserver.serialization.Serialization
-import com.lightningkite.lightningserver.serverhealth.HealthCheckable
-import com.lightningkite.lightningserver.serverhealth.HealthStatus
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.serializer
 
 interface PubSubInterface: HealthCheckable {
+    val serialization: Serialization
     fun <T> get(key: String, serializer: KSerializer<T>): PubSubChannel<T>
     fun string(key: String): PubSubChannel<String>
     override suspend fun healthCheck(): HealthStatus {
@@ -24,7 +25,7 @@ interface PubSubInterface: HealthCheckable {
         get() = "PubSub"
 }
 inline operator fun <reified T: Any> PubSubInterface.get(key: String): PubSubChannel<T> {
-    return get(key, Serialization.json.serializersModule.serializer<T>())
+    return get(key, serialization.json.serializersModule.serializer<T>())
 }
 
 interface PubSubChannel<T>: Flow<T>, FlowCollector<T> {}

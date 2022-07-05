@@ -22,7 +22,7 @@ class SettingsSerializer(val server: Server) : KSerializer<Map<Server.Setting<*>
                 if (index == CompositeDecoder.UNKNOWN_NAME) continue
                 val setting = parts[index]
                 @Suppress("UNCHECKED_CAST")
-                map[setting] = decodeSerializableElement(setting.serializer.descriptor, index, setting.serializer)
+                map[setting] = decodeSerializableElement(descriptor, index, setting.serializer)
             }
         }
         return map
@@ -33,7 +33,7 @@ class SettingsSerializer(val server: Server) : KSerializer<Map<Server.Setting<*>
             for ((index, setting) in parts.withIndex()) {
                 @Suppress("UNCHECKED_CAST")
                 encodeSerializableElement(
-                    setting.serializer.descriptor,
+                    descriptor,
                     index,
                     setting.serializer as KSerializer<Any?>,
                     value[setting]

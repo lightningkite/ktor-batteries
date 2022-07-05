@@ -1,10 +1,10 @@
 package com.lightningkite.lightningserver.cache
 
+import com.lightningkite.lightningdb.HealthCheckable
+import com.lightningkite.lightningdb.HealthStatus
 import com.lightningkite.lightningserver.Server
 import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.serialization.Serialization
-import com.lightningkite.lightningserver.serverhealth.HealthCheckable
-import com.lightningkite.lightningserver.serverhealth.HealthStatus
 import io.lettuce.core.RedisClient
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.KSerializer

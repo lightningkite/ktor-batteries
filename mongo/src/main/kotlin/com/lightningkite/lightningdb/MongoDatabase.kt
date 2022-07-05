@@ -3,10 +3,7 @@ package com.lightningkite.lightningdb
 import com.github.jershell.kbson.Configuration
 import com.github.jershell.kbson.KBson
 import com.mongodb.reactivestreams.client.MongoClient
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.serializer
 import org.litote.kmongo.coroutine.CoroutineDatabase
@@ -48,6 +45,16 @@ class MongoDatabase(val database: CoroutineDatabase, var ensureIndexesReady: Boo
             }
         }
     } as Lazy<MongoFieldCollection<T>>).value
+
+    override suspend fun healthCheck(): HealthStatus =
+        try {
+            withTimeout(5000L) {
+                database.listCollectionNames()
+                HealthStatus(HealthStatus.Level.OK)
+            }
+        } catch (e: Exception) {
+            HealthStatus(HealthStatus.Level.ERROR, additionalMessage = e.message)
+        }
 }
 
 fun MongoClient.database(name: String, ensureIndexesReady: Boolean = false): MongoDatabase = MongoDatabase(this, name, ensureIndexesReady)

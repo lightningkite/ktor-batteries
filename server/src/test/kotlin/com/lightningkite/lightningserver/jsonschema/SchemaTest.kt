@@ -2,7 +2,6 @@
 package com.lightningkite.lightningserver.jsonschema
 
 import com.lightningkite.lightningserver.serialization.Serialization
-import com.lightningkite.lightningserver.settings.GeneralServerSettings
 import com.lightningkite.lightningserver.typed.*
 import com.lightningkite.lightningdb.*
 import io.ktor.server.auth.*
@@ -28,15 +27,17 @@ import kotlin.test.assertTrue
 
 class SchemaTest {
 
+    val serialization = Serialization()
+
     @Test
     fun quick() {
-        println(Json.encodeToSchema(Post.serializer()))
+        println(serialization.json.encodeToSchema(Post.serializer()))
     }
 
     @Test
     fun condition() {
         prepareModels()
-        println(Json.encodeToSchema(Condition.serializer(Post.serializer())))
+        println(serialization.json.encodeToSchema(Condition.serializer(Post.serializer())))
     }
 
     @Test
@@ -54,64 +55,10 @@ class SchemaTest {
 
     @Test
     fun nullableSchema() {
-        val schema = Serialization.json.encodeToSchema(Acknowledgement.serializer())
+        val schema = serialization.json.encodeToSchema(Acknowledgement.serializer())
         assertTrue(schema.contains("null"))
     }
-//    @Test fun makeFormFile() {
-//        File("./build/out/form.html").apply { parentFile.mkdirs() }.bufferedWriter().use {
-//            it.appendHTML().html {
-//                head { this.includeFormScript() }
-//                body {
-//                    form(
-//                        "testThing",
-//                        "testThing",
-//                        Post(
-//                            author = "Jack Knife",
-//                            title = "101 Ways to Cut",
-//                            content = "Leftways\nRightways\nDownwards\nAnd more!"
-//                        )
-//                    )
-//                    form<Modification<Post>>("testThingChange", "testThingChange", collapsed = true)
-//                }
-//            }
-//        }
-//    }
-//    @Test fun helpTest() {
-//        Settings(server = GeneralServerSettings(port = 8081))
-//        runServer {
-//            defaults()
-//            routing {
-//                val notes = arrayListOf<String>("videoA", "videoB")
-//                subject("notes") { user: TestPrincipal? ->
-//                    notes
-//                }.apply {
-//                    get { _ -> this }
-//                    this.post { user, subj: String -> notes.add(subj) }
-//
-//                    route.subject("{id}") { user: TestPrincipal? ->
-//                        parameters["id"]!!.toInt()
-//                    }.apply {
-//                        get { _ -> notes[this] }
-//                        delete { user -> notes.removeAt(this) }
-//                    }
-//                }
-//                route("api-docs") {
-//                    apiHelp()
-//                }
-//
-//                subject("mongoModel") { user: TestPrincipal? -> Post.mongo }.apply {
-//                    get { _, params: Query<Post> -> this.query(params) }
-//                    post("query") { _, params: Query<Post> -> this.query(params) }
-//                    post { _, params: Post -> this.insertOne(params) }
-//                    patch { _, params: MassModification<Post> -> this.updateMany(params) }
-//                    subject("{id}") { user: TestPrincipal? -> parameters["id"]!!.toUUID() }.apply {
-//                        get { _ -> Post.mongo.get(this) ?: throw NotFoundException() }
-//                        patch { _, params: Modification<Post> -> Post.mongo.updateOneById(this, params) }
-//                    }
-//                }
-//            }
-//        }
-//    }
+
 }
 
 

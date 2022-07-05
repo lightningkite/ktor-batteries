@@ -13,7 +13,6 @@ import java.io.DataOutputStream
 
 class JavaData(override val serializersModule: SerializersModule): BinaryFormat {
     override fun <T> decodeFromByteArray(deserializer: DeserializationStrategy<T>, bytes: ByteArray): T {
-        println("Decoding $deserializer from ${bytes.contentToString()}")
         return DataInputDecoder(DataInputStream(ByteArrayInputStream(bytes))).decodeSerializableValue(deserializer)
     }
 

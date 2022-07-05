@@ -1,5 +1,6 @@
 package com.lightningkite.lightningserver.cache
 
+import com.lightningkite.lightningserver.serialization.Serialization
 import io.lettuce.core.RedisClient
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
@@ -23,7 +24,7 @@ class RedisTest {
             .build()
         redisServer.start()
         try {
-            val pubSub = RedisCache(RedisClient.create("redis://127.0.0.1:6379/0"))
+            val pubSub = RedisCache(Serialization(), RedisClient.create("redis://127.0.0.1:6379/0"))
             runBlocking {
                 pubSub.set("test", 4)
                 assertEquals(4, pubSub.get<Int>("test"))

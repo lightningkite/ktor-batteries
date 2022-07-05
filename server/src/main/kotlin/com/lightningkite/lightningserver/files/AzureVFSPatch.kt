@@ -1,5 +1,6 @@
 package com.lightningkite.lightningserver.files
 
+import com.azure.storage.blob.BlobClient
 import com.azure.storage.blob.BlobContainerAsyncClient
 import com.azure.storage.blob.BlobContainerClient
 import com.azure.storage.blob.BlobContainerClientBuilder
@@ -8,6 +9,7 @@ import com.azure.storage.blob.sas.BlobServiceSasSignatureValues
 import com.azure.storage.common.StorageSharedKeyCredential
 import com.azure.storage.common.sas.SasProtocol
 import com.dalet.vfs2.provider.azure.*
+import com.lightningkite.lightningserver.ServerRunner
 import org.apache.commons.vfs2.*
 import org.apache.commons.vfs2.impl.DefaultFileSystemConfigBuilder
 import org.apache.commons.vfs2.provider.FileReplicator
@@ -15,32 +17,34 @@ import org.apache.commons.vfs2.provider.TemporaryFileStore
 import org.apache.commons.vfs2.provider.VfsComponentContext
 import org.apache.commons.vfs2.util.UserAuthenticatorUtils
 import java.io.File
+import java.net.URI
 import java.time.OffsetDateTime
 import java.util.*
 
-private object AzureVFSPatch {
-    val blobContainerAsyncClient: BlobContainerAsyncClient
-    val blobContainerClient: BlobContainerClient
-    init {
-        val azRootName = AzFileNameParser.getInstance().parseUri(object: VfsComponentContext{
+private val blobContainerClients = HashMap<String, BlobContainerClient>()
+
+private fun AzFileObject.hackBlobClient(): BlobClient {
+    val rootURI = this.fileSystem.rootURI
+    val blobContainerClient =  blobContainerClients.getOrPut(rootURI) {
+        val azRootName = AzFileNameParser.getInstance().parseUri(object : VfsComponentContext {
             override fun resolveFile(
                 baseFile: FileObject?,
                 name: String?,
                 fileSystemOptions: FileSystemOptions?
             ): FileObject = throw UnsupportedOperationException()
-            override fun resolveFile(name: String?, fileSystemOptions: FileSystemOptions?): FileObject = throw UnsupportedOperationException()
+
+            override fun resolveFile(name: String?, fileSystemOptions: FileSystemOptions?): FileObject =
+                throw UnsupportedOperationException()
+
             override fun parseURI(uri: String?): FileName = throw UnsupportedOperationException()
             override fun getReplicator(): FileReplicator = throw UnsupportedOperationException()
             override fun getTemporaryFileStore(): TemporaryFileStore = throw UnsupportedOperationException()
             override fun toFileObject(file: File?): FileObject = throw UnsupportedOperationException()
             override fun getFileSystemManager(): FileSystemManager = throw UnsupportedOperationException()
-        }, null, FilesSettings.instance.storageUrl) as AzFileName
-
-        val fileSystem: AzFileSystem
+        }, null, rootURI) as AzFileName
 
         val resolvedFileSystemOptions = AzFileProvider.getDefaultFileSystemOptions()
         val ua = DefaultFileSystemConfigBuilder.getInstance().getUserAuthenticator(resolvedFileSystemOptions)
-
 
         var authData: UserAuthenticationData? = null
 
@@ -63,11 +67,7 @@ private object AzureVFSPatch {
                 Locale.ROOT, "https://%s.blob.core.windows.net/%s", azRootName.account,
                 azRootName.container
             )
-            blobContainerAsyncClient = BlobContainerClientBuilder()
-                .endpoint(endPoint)
-                .credential(storageCreds)
-                .buildAsyncClient()
-            blobContainerClient = BlobContainerClientBuilder()
+            BlobContainerClientBuilder()
                 .endpoint(endPoint)
                 .credential(storageCreds)
                 .buildClient()
@@ -75,9 +75,8 @@ private object AzureVFSPatch {
             UserAuthenticatorUtils.cleanup(authData)
         }
     }
+    return blobContainerClient.getBlobClient(name.path.removePrefix("/"))
 }
-
-private fun AzFileObject.hackBlobClient() = AzureVFSPatch.blobContainerClient.getBlobClient(name.path.removePrefix("/"))
 
 fun AzFileObject.uploadUrl(seconds: Int): String {
     val offsetDateTime = OffsetDateTime.now().plusSeconds(seconds.toLong())

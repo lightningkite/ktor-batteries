@@ -52,6 +52,7 @@ fun Server.typescriptSdk(out: Appendable) = with(out) {
                     }
                     appendLine("}")
                 }
+                else -> {}
             }
         }
 

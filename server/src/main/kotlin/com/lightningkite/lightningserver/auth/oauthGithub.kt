@@ -4,12 +4,10 @@ import com.lightningkite.lightningserver.ServerBuilder
 import com.lightningkite.lightningserver.ServerRunner
 import com.lightningkite.lightningserver.client
 import com.lightningkite.lightningserver.core.LightningServerDsl
-import com.lightningkite.lightningserver.core.ServerPath
-import com.lightningkite.lightningserver.http.HttpRoute
+import com.lightningkite.lightningserver.http.HttpEndpoint
 import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.client.request.forms.*
-import io.ktor.http.ContentType
 import io.ktor.server.application.*
 import io.ktor.server.plugins.*
 import io.ktor.server.response.*
@@ -24,10 +22,9 @@ import java.util.*
  * @param defaultLanding The final page to send the user after authentication.
  * @param emailToId A lambda that returns the users ID given an email.
  */
-context(ServerBuilder)
         @LightningServerDsl
-fun ServerPath.oauthGithub(
-    landingRoute: HttpRoute,
+fun ServerBuilder.Path.oauthGithub(
+    landingRoute: HttpEndpoint,
     emailToId: suspend ServerRunner.(String) -> String
 ) = oauth(
     landingRoute = landingRoute,

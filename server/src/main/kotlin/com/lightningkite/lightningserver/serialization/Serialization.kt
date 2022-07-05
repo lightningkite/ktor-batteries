@@ -44,7 +44,6 @@ data class Serialization(
     val bsonConfig: Configuration = Configuration(),
     val cborConfig: CborBuilder.()->Unit = {
         ignoreUnknownKeys = true
-        serializersModule = module
     }
 ) {
     val json: Json = Json() {

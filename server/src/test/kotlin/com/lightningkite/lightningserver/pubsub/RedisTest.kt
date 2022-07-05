@@ -1,5 +1,6 @@
 package com.lightningkite.lightningserver.pubsub
 
+import com.lightningkite.lightningserver.serialization.Serialization
 import io.lettuce.core.RedisClient
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
@@ -23,7 +24,7 @@ class RedisTest {
             .build()
         redisServer.start()
         try {
-            val pubSub = RedisPubSub(RedisClient.create("redis://127.0.0.1:6379/0"))
+            val pubSub = RedisPubSub(Serialization(), RedisClient.create("redis://127.0.0.1:6379/0"))
             val channel = pubSub.get<Int>("Test")
             var received: Int? = null
             runBlocking {
