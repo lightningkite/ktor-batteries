@@ -1,6 +1,8 @@
 package com.lightningkite.ktorbatteries.files
 
+import com.dalet.vfs2.provider.azure.AzConstants
 import com.dalet.vfs2.provider.azure.AzFileProvider
+import com.github.vfss3.S3FileProvider
 import com.lightningkite.ktorbatteries.SettingSingleton
 import com.lightningkite.ktorbatteries.serverhealth.HealthCheckable
 import com.lightningkite.ktorbatteries.serverhealth.HealthStatus
@@ -13,6 +15,7 @@ import org.apache.commons.vfs2.FileSystemOptions
 import org.apache.commons.vfs2.VFS
 import org.apache.commons.vfs2.auth.StaticUserAuthenticator
 import org.apache.commons.vfs2.impl.DefaultFileSystemConfigBuilder
+import org.apache.commons.vfs2.impl.DefaultFileSystemManager
 import java.io.File
 
 /**
@@ -32,14 +35,29 @@ data class FilesSettings(
     val userContentPath: String = "user-content",
     val signedUrlExpirationSeconds: Int? = null
 ) : HealthCheckable {
-    companion object : SettingSingleton<FilesSettings>()
+    companion object : SettingSingleton<FilesSettings>() {
+        val manager by lazy {
+            DefaultFileSystemManager().apply {
+                addProvider(AzConstants.AZBSSCHEME, AzFileProvider())
+                addProvider("s3", S3FileProvider())
+            }
+        }
+    }
 
     init {
-        if(storageUrl.startsWith("az")) {
-            val auth = StaticUserAuthenticator("", storageUrl.substringAfter("://").substringBefore('.'), this.key ?: throw IllegalStateException("Azure file system requested, but no key was provided."))
+        if (storageUrl.startsWith("az")) {
+            val auth = StaticUserAuthenticator(
+                "",
+                storageUrl.substringAfter("://").substringBefore('.'),
+                this.key ?: throw IllegalStateException("Azure file system requested, but no key was provided.")
+            )
             println("Establishing authenticator for Azure as $auth")
-            DefaultFileSystemConfigBuilder.getInstance().setUserAuthenticator(AzFileProvider.getDefaultFileSystemOptions(), auth)
-            println(DefaultFileSystemConfigBuilder.getInstance().getUserAuthenticator(AzFileProvider.getDefaultFileSystemOptions()))
+            DefaultFileSystemConfigBuilder.getInstance()
+                .setUserAuthenticator(AzFileProvider.getDefaultFileSystemOptions(), auth)
+            println(
+                DefaultFileSystemConfigBuilder.getInstance()
+                    .getUserAuthenticator(AzFileProvider.getDefaultFileSystemOptions())
+            )
         }
         instance = this
     }
@@ -58,5 +76,5 @@ data class FilesSettings(
         HealthStatus(HealthStatus.Level.ERROR, additionalMessage = e.message)
     }
 
-    val root get() = VFS.getManager().resolveFile(instance.storageUrl)
+    val root get() = manager.resolveFile(instance.storageUrl)
 }
