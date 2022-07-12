@@ -40,6 +40,7 @@ data class FilesSettings(
             DefaultFileSystemManager().apply {
                 addProvider(AzConstants.AZBSSCHEME, AzFileProvider())
                 addProvider("s3", S3FileProvider())
+                init()
             }
         }
     }
