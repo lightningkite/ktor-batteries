@@ -2,7 +2,9 @@ package com.lightningkite.ktorbatteries.settings
 
 import io.ktor.http.*
 import io.ktor.server.application.*
+import io.ktor.server.plugins.cors.*
 import io.ktor.server.plugins.cors.routing.*
+import io.ktor.server.plugins.cors.routing.CORS
 
 /**
  * A shortcut function to set up CORS using the cors value from GeneralServerSettings.
@@ -23,6 +25,7 @@ fun Application.configureCors(customHeaders: List<String>? = null) {
 
         allowHeader(HttpHeaders.ContentType)
         allowHeader(HttpHeaders.Authorization)
+        exposedHeaders.addAll(CORSConfig.CorsSimpleResponseHeaders)
         customHeaders?.forEach {
             allowHeader(it)
         }
