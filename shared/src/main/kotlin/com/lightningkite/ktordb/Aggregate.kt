@@ -1,6 +1,7 @@
+@file:SharedCode
 package com.lightningkite.ktordb
 
-import com.lightningkite.khrysalis.IsHashable
+import com.lightningkite.khrysalis.SharedCode
 import kotlin.math.sqrt
 
 enum class Aggregate {
@@ -29,6 +30,7 @@ class SumAggregator: Aggregator {
         anyFound = true
         current += value
     }
+
     override fun complete(): Double? = if(anyFound) current else null
 }
 class AverageAggregator: Aggregator {
@@ -36,8 +38,9 @@ class AverageAggregator: Aggregator {
     var current: Double = 0.0
     override fun consume(value: Double) {
         count++
-        current += (value - current) / count
+        current += (value - current) / count.toDouble()
     }
+
     override fun complete(): Double? = if(count == 0) null else current
 }
 class StandardDeviationSampleAggregator: Aggregator {
@@ -47,11 +50,12 @@ class StandardDeviationSampleAggregator: Aggregator {
     override fun consume(value: Double) {
         count++
         val delta1 = value - mean
-        mean += (delta1) / count
+        mean += (delta1) / count.toDouble()
         val delta2 = value - mean
         m2 += delta1 * delta2
     }
-    override fun complete(): Double? = if(count < 2) null else sqrt(m2 / (count - 1))
+
+    override fun complete(): Double? = if (count < 2) null else sqrt(m2 / (count.toDouble() - 1))
 }
 class StandardDeviationPopulationAggregator: Aggregator {
     var count: Int = 0
@@ -60,11 +64,12 @@ class StandardDeviationPopulationAggregator: Aggregator {
     override fun consume(value: Double) {
         count++
         val delta1 = value - mean
-        mean += (delta1) / count
+        mean += (delta1) / count.toDouble()
         val delta2 = value - mean
         m2 += delta1 * delta2
     }
-    override fun complete(): Double? = if(count == 0) null else sqrt(m2 / count)
+
+    override fun complete(): Double? = if (count == 0) null else sqrt(m2 / count.toDouble())
 }
 
 fun Sequence<Double>.aggregate(aggregate: Aggregate): Double? {
@@ -73,12 +78,4 @@ fun Sequence<Double>.aggregate(aggregate: Aggregate): Double? {
         aggregator.consume(item)
     }
     return aggregator.complete()
-}
-
-fun <GROUP: IsHashable> Sequence<Pair<GROUP, Double>>.aggregate(aggregate: Aggregate): Map<GROUP, Double?> {
-    val aggregators = HashMap<GROUP, Aggregator>()
-    for(entry in this) {
-        aggregators.getOrPut(entry.first) { aggregate.aggregator() }.consume(entry.second)
-    }
-    return aggregators.mapValues { it.value.complete() }
 }
