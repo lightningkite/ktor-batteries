@@ -6,3 +6,7 @@ node_modules
 java_pid*.hprof
 local
 settings.yaml
+web/dist
+web/coverage
+web-alt/dist
+web-alt/coverage
