@@ -88,6 +88,7 @@ fileprivate struct ConditionCodingKeys: CodingKey, Hashable {
     static let GreaterThanOrEqual = ConditionCodingKeys(stringValue: "GreaterThanOrEqual")
     static let LessThanOrEqual = ConditionCodingKeys(stringValue: "LessThanOrEqual")
     static let FullTextSearch = ConditionCodingKeys(stringValue: "FullTextSearch")
+    static let StringContains = ConditionCodingKeys(stringValue: "StringContains")
     static let IntBitsClear = ConditionCodingKeys(stringValue: "IntBitsClear")
     static let IntBitsSet = ConditionCodingKeys(stringValue: "IntBitsSet")
     static let IntBitsAnyClear = ConditionCodingKeys(stringValue: "IntBitsAnyClear")
