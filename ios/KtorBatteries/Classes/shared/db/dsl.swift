@@ -29,10 +29,10 @@ public final class PropChain<From : Codable & Hashable, To : Codable & Hashable>
     //    override fun equals(other: Any?): Boolean = other is PropChain<*, *> && mapCondition(Condition.Always()) == (other as PropChain<Any?, Any?>).mapCondition(Condition.Always())
 }
 
-public func condition<T : Codable & Hashable>(setup: @escaping (PropChain<T, T>) -> Condition<T>) -> Condition<T> {
+public func condition<T : Codable & Hashable>(setup: (PropChain<T, T>) -> Condition<T>) -> Condition<T> {
     return (setup)((startChain() as PropChain<T, T>));
 }
-public func modification<T : Codable & Hashable>(setup: @escaping (PropChain<T, T>) -> Modification<T>) -> Modification<T> {
+public func modification<T : Codable & Hashable>(setup: (PropChain<T, T>) -> Modification<T>) -> Modification<T> {
     return (setup)((startChain() as PropChain<T, T>));
 }
 

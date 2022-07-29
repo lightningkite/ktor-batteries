@@ -87,6 +87,7 @@ fileprivate struct ConditionCodingKeys: CodingKey, Hashable {
     static let LessThan = ConditionCodingKeys(stringValue: "LessThan")
     static let GreaterThanOrEqual = ConditionCodingKeys(stringValue: "GreaterThanOrEqual")
     static let LessThanOrEqual = ConditionCodingKeys(stringValue: "LessThanOrEqual")
+    static let StringContains = ConditionCodingKeys(stringValue: "StringContains")
     static let FullTextSearch = ConditionCodingKeys(stringValue: "FullTextSearch")
     static let StringContains = ConditionCodingKeys(stringValue: "StringContains")
     static let IntBitsClear = ConditionCodingKeys(stringValue: "IntBitsClear")
@@ -238,6 +239,11 @@ extension ConditionLessThanOrEqual: ConditionProtocol {
         try structure.encode(value, forKey: .LessThanOrEqual)
     }
 }
+extension ConditionStringContains: ConditionProtocol {
+    fileprivate func encodeSelfInStructure(structure: inout KeyedEncodingContainer<ConditionCodingKeys>) throws {
+        try structure.encodeCodable(self, forKey: .StringContains)
+    }
+}
 extension ConditionFullTextSearch: ConditionProtocol {
     fileprivate func encodeSelfInStructure(structure: inout KeyedEncodingContainer<ConditionCodingKeys>) throws {
         try structure.encodeCodable(self, forKey: .FullTextSearch)
@@ -340,8 +346,10 @@ extension Condition: AltCodable {
             case .LessThanOrEqual:
                 let selfType = (Self.self as! ComparableCondition.Type)
                 return selfType.conditionLessThanOrEqual(try structure.decode(T.self, forKey: key)) as! Self
-            case .FullTextSearch:
-                return ConditionFullTextSearch<String>(try structure.decode(String.self, forKey: key), ignoreCase: true) as! Self
+        case .StringContains:
+            return ConditionStringContains(try structure.decode(String.self, forKey: key), ignoreCase: true) as! Self
+        case .FullTextSearch:
+            return ConditionFullTextSearch<String>(try structure.decode(String.self, forKey: key), ignoreCase: true) as! Self
             case .IntBitsClear:
                 return ConditionIntBitsClear(mask: try structure.decode(Int.self, forKey: key)) as! Self
             case .IntBitsSet:
@@ -676,18 +684,4 @@ extension SortPart: AltCodable {
 
 extension PartialPropertyIterableProperty: AltCodable {
     public static func encode(_ value: PartialPropertyIterableProperty<Root>, to encoder: Encoder) throws {
-        var s = encoder.singleValueContainer()
-        try s.encode(value.name)
-    }
-
-    public static func decode(from decoder: Decoder) throws -> Self {
-        var s = try decoder.singleValueContainer()
-        let string = try s.decode(String.self)
-        let x = (Root.self as! AnyPropertyIterable.Type).anyProperties.find { $0.name == string } as? Self
-        if let x = x {
-            return x
-        } else {
-            throw Exception("No property named \(string) found")
-        }
-    }
-}
+        var s = encoder.singleValueCont
