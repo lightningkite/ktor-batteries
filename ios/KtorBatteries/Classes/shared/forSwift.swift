@@ -89,7 +89,6 @@ fileprivate struct ConditionCodingKeys: CodingKey, Hashable {
     static let LessThanOrEqual = ConditionCodingKeys(stringValue: "LessThanOrEqual")
     static let StringContains = ConditionCodingKeys(stringValue: "StringContains")
     static let FullTextSearch = ConditionCodingKeys(stringValue: "FullTextSearch")
-    static let StringContains = ConditionCodingKeys(stringValue: "StringContains")
     static let IntBitsClear = ConditionCodingKeys(stringValue: "IntBitsClear")
     static let IntBitsSet = ConditionCodingKeys(stringValue: "IntBitsSet")
     static let IntBitsAnyClear = ConditionCodingKeys(stringValue: "IntBitsAnyClear")
@@ -682,6 +681,21 @@ extension SortPart: AltCodable {
     }
 }
 
+
 extension PartialPropertyIterableProperty: AltCodable {
     public static func encode(_ value: PartialPropertyIterableProperty<Root>, to encoder: Encoder) throws {
-        var s = encoder.singleValueCont
+        var s = encoder.singleValueContainer()
+        try s.encode(value.name)
+    }
+
+    public static func decode(from decoder: Decoder) throws -> Self {
+        var s = try decoder.singleValueContainer()
+        let string = try s.decode(String.self)
+        let x = (Root.self as! AnyPropertyIterable.Type).anyProperties.find { $0.name == string } as? Self
+        if let x = x {
+            return x
+        } else {
+            throw Exception("No property named \(string) found")
+        }
+    }
+}
