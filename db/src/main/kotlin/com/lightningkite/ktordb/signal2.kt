@@ -1,34 +1,85 @@
 package com.lightningkite.ktordb
 
-inline fun <Model : Any> FieldCollection<Model>.interceptCreate(crossinline interceptor: (Model) -> Model): FieldCollection<Model> =
+inline fun <Model : Any> FieldCollection<Model>.interceptCreate(crossinline interceptor: suspend (Model) -> Model): FieldCollection<Model> =
     object : FieldCollection<Model> by this {
-        override suspend fun insertOne(model: Model): Model = this@interceptCreate.insertOne(interceptor(model))
-        override suspend fun insertMany(models: List<Model>): List<Model> =
-            this@interceptCreate.insertMany(models.map(interceptor))
+        override val wraps = this@interceptCreate
+        override suspend fun insert(models: List<Model>): List<Model> =
+            wraps.insertMany(models.map { interceptor(it) })
 
-        override suspend fun upsertOne(condition: Condition<Model>, model: Model): Model? =
-            this@interceptCreate.upsertOne(condition, interceptor(model))
+        override suspend fun upsertOne(
+            condition: Condition<Model>,
+            modification: Modification<Model>,
+            model: Model
+        ): EntryChange<Model> = wraps.upsertOne(condition, modification, interceptor(model))
+
+        override suspend fun upsertOneIgnoringResult(
+            condition: Condition<Model>,
+            modification: Modification<Model>,
+            model: Model
+        ): Boolean = wraps.upsertOneIgnoringResult(condition, modification, interceptor(model))
     }
 
-inline fun <Model : Any> FieldCollection<Model>.interceptReplace(crossinline interceptor: (Model) -> Model): FieldCollection<Model> =
+inline fun <Model : Any> FieldCollection<Model>.interceptReplace(crossinline interceptor: suspend (Model) -> Model): FieldCollection<Model> =
     object : FieldCollection<Model> by this {
-        override suspend fun replaceOne(condition: Condition<Model>, model: Model): Model? =
-            this@interceptReplace.replaceOne(condition, interceptor(model))
+        override val wraps = this@interceptReplace
 
-        override suspend fun upsertOne(condition: Condition<Model>, model: Model): Model? =
-            this@interceptReplace.upsertOne(condition, interceptor(model))
+        override suspend fun upsertOne(
+            condition: Condition<Model>,
+            modification: Modification<Model>,
+            model: Model
+        ): EntryChange<Model> = wraps.upsertOne(condition, modification, interceptor(model))
+
+        override suspend fun upsertOneIgnoringResult(
+            condition: Condition<Model>,
+            modification: Modification<Model>,
+            model: Model
+        ): Boolean = wraps.upsertOneIgnoringResult(condition, modification, interceptor(model))
+
+        override suspend fun replaceOne(condition: Condition<Model>, model: Model): EntryChange<Model> =
+            wraps.replaceOne(
+                condition,
+                interceptor(model)
+            )
+
+        override suspend fun replaceOneIgnoringResult(condition: Condition<Model>, model: Model): Boolean =
+            wraps.replaceOneIgnoringResult(
+                condition,
+                interceptor(model)
+            )
     }
 
-inline fun <Model : Any> FieldCollection<Model>.interceptModification(crossinline interceptor: (Modification<Model>) -> Modification<Model>): FieldCollection<Model> =
+inline fun <Model : Any> FieldCollection<Model>.interceptModification(crossinline interceptor: suspend (Modification<Model>) -> Modification<Model>): FieldCollection<Model> =
     object : FieldCollection<Model> by this {
-        override suspend fun findOneAndUpdate(
+        override val wraps = this@interceptModification
+        override suspend fun upsertOne(
+            condition: Condition<Model>,
+            modification: Modification<Model>,
+            model: Model
+        ): EntryChange<Model> = wraps.upsertOne(condition, interceptor(modification), model)
+
+        override suspend fun upsertOneIgnoringResult(
+            condition: Condition<Model>,
+            modification: Modification<Model>,
+            model: Model
+        ): Boolean = wraps.upsertOneIgnoringResult(condition, interceptor(modification), model)
+
+        override suspend fun updateOne(
             condition: Condition<Model>,
             modification: Modification<Model>
-        ): EntryChange<Model> = this@interceptModification.findOneAndUpdate(condition, interceptor(modification))
+        ): EntryChange<Model> = wraps.updateOne(condition, interceptor(modification))
 
-        override suspend fun updateMany(condition: Condition<Model>, modification: Modification<Model>): Int =
-            this@interceptModification.updateMany(condition, interceptor(modification))
+        override suspend fun updateOneIgnoringResult(
+            condition: Condition<Model>,
+            modification: Modification<Model>
+        ): Boolean = wraps.updateOneIgnoringResult(condition, interceptor(modification))
 
-        override suspend fun updateOne(condition: Condition<Model>, modification: Modification<Model>): Boolean =
-            this@interceptModification.updateOne(condition, interceptor(modification))
+        override suspend fun updateMany(
+            condition: Condition<Model>,
+            modification: Modification<Model>
+        ): CollectionChanges<Model> = wraps.updateMany(condition, interceptor(modification))
+
+        override suspend fun updateManyIgnoringResult(
+            condition: Condition<Model>,
+            modification: Modification<Model>
+        ): Int = wraps.updateManyIgnoringResult(condition, interceptor(modification))
     }

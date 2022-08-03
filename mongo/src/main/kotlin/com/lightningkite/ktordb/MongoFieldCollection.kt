@@ -9,6 +9,7 @@ import com.mongodb.client.result.InsertOneResult
 import com.mongodb.client.result.UpdateResult
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -30,8 +31,8 @@ import kotlin.reflect.KType
  */
 class MongoFieldCollection<Model : Any>(
     val serializer: KSerializer<Model>,
-    val wraps: CoroutineCollection<Model>
-) : FieldCollection<Model> {
+    val mongo: CoroutineCollection<Model>
+) : AbstractSignalFieldCollection<Model>() {
 
     override suspend fun find(
         condition: Condition<Model>,
@@ -40,7 +41,7 @@ class MongoFieldCollection<Model : Any>(
         limit: Int,
         maxQueryMs: Long
     ): Flow<Model> {
-        return wraps.find(condition.bson())
+        return mongo.find(condition.bson())
             .let {
                 if (skip != 0) it.skip(skip)
                 else it
@@ -64,54 +65,68 @@ class MongoFieldCollection<Model : Any>(
             .toFlow()
     }
 
-    override suspend fun insertOne(
-        model: Model
-    ): Model {
-        wraps.insertOne(model)
-        return model
-    }
-
-    override suspend fun insertMany(
+    override suspend fun insertImpl(
         models: List<Model>
     ): List<Model> {
-        wraps.insertMany(models)
+        mongo.insertMany(models)
         return models
     }
 
-    override suspend fun replaceOne(
+    override suspend fun replaceOneImpl(condition: Condition<Model>, model: Model): EntryChange<Model> {
+        return updateOne(condition, Modification.Assign(model))
+    }
+
+    override suspend fun replaceOneIgnoringResultImpl(
         condition: Condition<Model>,
         model: Model
-    ): Model? {
-        val r = wraps.replaceOne(condition.bson(), model)
-        if (r.matchedCount == 0L) return null
-        return model
+    ): Boolean {
+        return mongo.replaceOne(condition.bson(), model).matchedCount != 0L
     }
 
-    override suspend fun upsertOne(condition: Condition<Model>, model: Model): Model? {
-        val r = wraps.replaceOne(condition.bson(), model, ReplaceOptions().upsert(true))
-        if (r.matchedCount == 0L) return null
-        return model
-    }
-
-    override suspend fun updateOne(
+    override suspend fun upsertOneImpl(
         condition: Condition<Model>,
         modification: Modification<Model>,
-    ): Boolean {
+        model: Model
+    ): EntryChange<Model> {
         val m = modification.bson()
-        val r = wraps.updateOne(
+        return mongo.findOneAndUpdate(
             condition.bson(),
             m.document,
-            m.options
-        )
-        return r.matchedCount > 0
+            FindOneAndUpdateOptions()
+                .returnDocument(ReturnDocument.BEFORE)
+                .upsert(m.options.isUpsert)
+                .bypassDocumentValidation(m.options.bypassDocumentValidation)
+                .collation(m.options.collation)
+                .arrayFilters(m.options.arrayFilters)
+                .hint(m.options.hint)
+                .hintString(m.options.hintString)
+        )?.let { EntryChange(it, modification(it)) } ?: run { mongo.insertOne(model); EntryChange(null, model) }
     }
 
-    override suspend fun findOneAndUpdate(
+    override suspend fun upsertOneIgnoringResultImpl(
+        condition: Condition<Model>,
+        modification: Modification<Model>,
+        model: Model
+    ): Boolean {
+        if (modification is Modification.Assign && modification.value == model) {
+            return mongo.replaceOne(condition.bson(), model, ReplaceOptions().upsert(true)).matchedCount != 0L
+        } else {
+            val m = modification.bson()
+            if (mongo.updateOne(condition.bson(), m.document, m.options).matchedCount != 0L)
+                return true
+            else {
+                mongo.insertOne(model)
+                return false
+            }
+        }
+    }
+
+    override suspend fun updateOneImpl(
         condition: Condition<Model>,
         modification: Modification<Model>
     ): EntryChange<Model> {
         val m = modification.bson()
-        val before = wraps.findOneAndUpdate(
+        val before = mongo.findOneAndUpdate(
             condition.bson(),
             m.document,
             FindOneAndUpdateOptions()
@@ -127,47 +142,91 @@ class MongoFieldCollection<Model : Any>(
         return EntryChange(before, after)
     }
 
-    override suspend fun updateMany(
+    override suspend fun updateOneIgnoringResultImpl(
+        condition: Condition<Model>,
+        modification: Modification<Model>
+    ): Boolean {
+        val m = modification.bson()
+        return mongo.updateOne(condition.bson(), m.document, m.options).matchedCount != 0L
+    }
+
+    override suspend fun updateManyImpl(
+        condition: Condition<Model>,
+        modification: Modification<Model>
+    ): CollectionChanges<Model> {
+        val m = modification.bson()
+        val changes = ArrayList<EntryChange<Model>>()
+        mongo.withDocumentClass<BsonDocument>().find(condition.bson()).toFlow().collectChunked(1000) { list ->
+            mongo.updateMany(Filters.`in`("_id", list.map { it["_id"] }), m.document, m.options)
+            list.asSequence().map { MongoDatabase.bson.load(serializer, it) }
+                .forEach {
+                    changes.add(EntryChange(it, modification(it)))
+                }
+        }
+        return CollectionChanges(changes = changes)
+    }
+
+    override suspend fun updateManyIgnoringResultImpl(
         condition: Condition<Model>,
         modification: Modification<Model>,
     ): Int {
         val m = modification.bson()
-        return wraps.updateMany(
+        return mongo.updateMany(
             condition.bson(),
             m.document,
             m.options
         ).matchedCount.toInt()
     }
 
-    override suspend fun deleteOne(
-        condition: Condition<Model>
-    ): Boolean {
-        return wraps.deleteOne(condition.bson()).deletedCount > 0
+    override suspend fun deleteOneImpl(condition: Condition<Model>): Model? {
+        return mongo.withDocumentClass<BsonDocument>().find(condition.bson()).toFlow().firstOrNull()?.let {
+            val id = it["_id"]
+            mongo.deleteOne(Filters.eq("_id", id))
+            MongoDatabase.bson.load(serializer, it)
+        }
     }
 
-    override suspend fun deleteMany(
+    override suspend fun deleteOneIgnoringOldImpl(
+        condition: Condition<Model>
+    ): Boolean {
+        return mongo.deleteOne(condition.bson()).deletedCount > 0
+    }
+
+    override suspend fun deleteManyImpl(condition: Condition<Model>): List<Model> {
+        val remove = ArrayList<Model>()
+        mongo.withDocumentClass<BsonDocument>().find(condition.bson()).toFlow().collectChunked(1000) { list ->
+            mongo.deleteMany(Filters.`in`("_id", list.map { it["_id"] }))
+            list.asSequence().map { MongoDatabase.bson.load(serializer, it) }
+                .forEach {
+                    remove.add(it)
+                }
+        }
+        return remove
+    }
+
+    override suspend fun deleteManyIgnoringOldImpl(
         condition: Condition<Model>
     ): Int {
-        return wraps.deleteMany(condition.bson()).deletedCount.toInt()
+        return mongo.deleteMany(condition.bson()).deletedCount.toInt()
     }
 
     override suspend fun watch(
         condition: Condition<Model>
-    ): Flow<EntryChange<Model>> = wraps.watch(condition)
+    ): Flow<EntryChange<Model>> = mongo.watch(condition)
 
 
     @Serializable
     data class KeyHolder<Key>(val _id: Key)
 
     override suspend fun count(condition: Condition<Model>): Int {
-        return wraps.countDocuments(condition.bson()).toInt()
+        return mongo.countDocuments(condition.bson()).toInt()
     }
 
     override suspend fun <Key> groupCount(
         condition: Condition<Model>,
         groupBy: KProperty1<Model, Key>
     ): Map<Key, Int> {
-        return wraps.aggregate<BsonDocument>(
+        return mongo.aggregate<BsonDocument>(
             match(condition.bson()),
             group("\$" + groupBy.name, Accumulators.sum("count", 1))
         )
@@ -192,7 +251,7 @@ class MongoFieldCollection<Model : Any>(
         condition: Condition<Model>,
         property: KProperty1<Model, N>
     ): Double? {
-        return wraps.aggregate<BsonDocument>(match(condition.bson()), group(null, aggregate.asValueBson(property.name)))
+        return mongo.aggregate<BsonDocument>(match(condition.bson()), group(null, aggregate.asValueBson(property.name)))
             .toList()
             .map {
                 if (it.isNull("value")) null
@@ -207,7 +266,7 @@ class MongoFieldCollection<Model : Any>(
         groupBy: KProperty1<Model, Key>,
         property: KProperty1<Model, N>
     ): Map<Key, Double?> {
-        return wraps.aggregate<BsonDocument>(
+        return mongo.aggregate<BsonDocument>(
             match(condition.bson()),
             group("\$" + groupBy.name, aggregate.asValueBson(property.name))
         )
@@ -228,12 +287,12 @@ class MongoFieldCollection<Model : Any>(
                 when (it) {
                     is UniqueSet -> {
                         requireCompletion += scope.launch {
-                            wraps.ensureIndex(Sorts.ascending(it.fields.toList()), IndexOptions().unique(true))
+                            mongo.ensureIndex(Sorts.ascending(it.fields.toList()), IndexOptions().unique(true))
                         }
                     }
                     is IndexSet -> {
                         scope.launch {
-                            wraps.ensureIndex(
+                            mongo.ensureIndex(
                                 Sorts.ascending(it.fields.toList()),
                                 IndexOptions().unique(false).background(true)
                             )
@@ -241,12 +300,15 @@ class MongoFieldCollection<Model : Any>(
                     }
                     is TextIndex -> {
                         requireCompletion += scope.launch {
-                            wraps.ensureIndex(documentOf(*it.fields.map { it to "text" }.toTypedArray()), IndexOptions().name("${wraps.namespace.fullName}TextIndex"))
+                            mongo.ensureIndex(
+                                documentOf(*it.fields.map { it to "text" }.toTypedArray()),
+                                IndexOptions().name("${mongo.namespace.fullName}TextIndex")
+                            )
                         }
                     }
                     is NamedUniqueSet -> {
                         requireCompletion += scope.launch {
-                            wraps.ensureIndex(
+                            mongo.ensureIndex(
                                 Sorts.ascending(it.fields.toList()),
                                 IndexOptions().unique(true).name(it.indexName)
                             )
@@ -254,7 +316,7 @@ class MongoFieldCollection<Model : Any>(
                     }
                     is NamedIndexSet -> {
                         scope.launch {
-                            wraps.ensureIndex(
+                            mongo.ensureIndex(
                                 Sorts.ascending(it.fields.toList()),
                                 IndexOptions().unique(false).name(it.indexName).background(true)
                             )
@@ -262,7 +324,7 @@ class MongoFieldCollection<Model : Any>(
                     }
                     is NamedTextIndex -> {
                         requireCompletion += scope.launch {
-                            wraps.ensureIndex(documentOf(*it.fields.map { it to "text" }.toTypedArray()))
+                            mongo.ensureIndex(documentOf(*it.fields.map { it to "text" }.toTypedArray()))
                         }
                     }
                 }
@@ -274,7 +336,7 @@ class MongoFieldCollection<Model : Any>(
                     when (it) {
                         is NamedIndex -> {
                             scope.launch {
-                                wraps.ensureIndex(
+                                mongo.ensureIndex(
                                     Sorts.ascending(descriptor.getElementName(index)),
                                     IndexOptions().unique(false).name(it.indexName.takeUnless { it.isBlank() })
                                         .background(true)
@@ -283,7 +345,7 @@ class MongoFieldCollection<Model : Any>(
                         }
                         is Index -> {
                             scope.launch {
-                                wraps.ensureIndex(
+                                mongo.ensureIndex(
                                     Sorts.ascending(descriptor.getElementName(index)),
                                     IndexOptions().unique(false).background(true)
                                 )
@@ -291,7 +353,7 @@ class MongoFieldCollection<Model : Any>(
                         }
                         is NamedUnique -> {
                             requireCompletion += scope.launch {
-                                wraps.ensureIndex(
+                                mongo.ensureIndex(
                                     Sorts.ascending(descriptor.getElementName(index)),
                                     IndexOptions().unique(true).name(it.indexName.takeUnless { it.isBlank() })
                                 )
@@ -299,7 +361,7 @@ class MongoFieldCollection<Model : Any>(
                         }
                         is Unique -> {
                             requireCompletion += scope.launch {
-                                wraps.ensureIndex(
+                                mongo.ensureIndex(
                                     Sorts.ascending(descriptor.getElementName(index)),
                                     IndexOptions().unique(true)
                                 )

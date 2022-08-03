@@ -123,6 +123,19 @@ inline fun <reified USER, reified T : HasId<ID>, reified ID : Comparable<ID>> Ro
         }
     )
 
+    postItem(
+        postIdPath = "",
+        summary = "Upsert",
+        description = "Creates or updates a ${modelName}",
+        errorCases = listOf(),
+        successCode = HttpStatusCode.Created,
+        implementation = { user: USER, id: ID, value: T ->
+            getCollection(user)
+                .upsertOneById(id, value)
+                .new
+        }
+    )
+
     post(
         path = "bulk",
         summary = "Insert Bulk",
@@ -147,19 +160,6 @@ inline fun <reified USER, reified T : HasId<ID>, reified ID : Comparable<ID>> Ro
         }
     )
 
-    postItem(
-        postIdPath = "",
-        summary = "Upsert",
-        description = "Creates or updates a ${modelName}",
-        errorCases = listOf(),
-        successCode = HttpStatusCode.Created,
-        implementation = { user: USER, id: ID, value: T ->
-            getCollection(user)
-                .upsertOneById(id, value)
-                ?: throw NotFoundException()
-        }
-    )
-
     // This is used replace many objects at once. This does make individual calls to the database. Kmongo does not have a many replace option.
     put(
         path = "",
@@ -168,7 +168,7 @@ inline fun <reified USER, reified T : HasId<ID>, reified ID : Comparable<ID>> Ro
         errorCases = listOf(),
         implementation = { user: USER, values: List<T> ->
             val db = getCollection(user)
-            values.map { db.replaceOneById(it._id, it) }
+            values.mapNotNull { db.replaceOneById(it._id, it).new }
         }
     )
 
@@ -191,7 +191,7 @@ inline fun <reified USER, reified T : HasId<ID>, reified ID : Comparable<ID>> Ro
         implementation = { user: USER, id: ID, value: T ->
             getCollection(user)
                 .replaceOneById(id, value)
-                ?: throw NotFoundException()
+                .new
         }
     )
 
@@ -202,35 +202,13 @@ inline fun <reified USER, reified T : HasId<ID>, reified ID : Comparable<ID>> Ro
         errorCases = listOf(),
         implementation = { user: USER, input: MassModification<T> ->
             getCollection(user)
-                .updateMany(input)
+                .updateMany(input.condition, input.modification)
+                .changes.size
         }
     )
 
     patchItem(
         postIdPath = "delta",
-        summary = "Modify",
-        description = "Modifies a ${modelName} by ID, returning both the previous value and new value.",
-        errorCases = listOf(
-            ApiEndpoint.ErrorCase(
-                status = HttpStatusCode.NotFound,
-                internalCode = 0,
-                description = "There was no known object by that ID."
-            ),
-            ApiEndpoint.ErrorCase(
-                status = HttpStatusCode.BadRequest,
-                internalCode = 0,
-                description = "The ID could not be parsed."
-            )
-        ),
-        implementation = { user: USER, id: ID, input: Modification<T> ->
-            getCollection(user)
-                .findOneAndUpdateById(id, input)
-                .also { if (it.old == null && it.new == null) throw NotFoundException() }
-        }
-    )
-
-    patchItem(
-        postIdPath = "",
         summary = "Modify With Diff",
         description = "Modifies a ${modelName} by ID, returning both the previous value and new value.",
         errorCases = listOf(
@@ -247,7 +225,30 @@ inline fun <reified USER, reified T : HasId<ID>, reified ID : Comparable<ID>> Ro
         ),
         implementation = { user: USER, id: ID, input: Modification<T> ->
             getCollection(user)
-                .findOneAndUpdateById(id, input)
+                .updateOneById(id, input)
+                .also { if (it.old == null && it.new == null) throw NotFoundException() }
+        }
+    )
+
+    patchItem(
+        postIdPath = "",
+        summary = "Modify",
+        description = "Modifies a ${modelName} by ID, returning the new value.",
+        errorCases = listOf(
+            ApiEndpoint.ErrorCase(
+                status = HttpStatusCode.NotFound,
+                internalCode = 0,
+                description = "There was no known object by that ID."
+            ),
+            ApiEndpoint.ErrorCase(
+                status = HttpStatusCode.BadRequest,
+                internalCode = 0,
+                description = "The ID could not be parsed."
+            )
+        ),
+        implementation = { user: USER, id: ID, input: Modification<T> ->
+            getCollection(user)
+                .updateOneById(id, input)
                 .also { if (it.old == null && it.new == null) throw NotFoundException() }
                 .new
         }
@@ -261,6 +262,7 @@ inline fun <reified USER, reified T : HasId<ID>, reified ID : Comparable<ID>> Ro
         implementation = { user: USER, filter: Condition<T> ->
             getCollection(user)
                 .deleteMany(filter)
+            Unit
         }
     )
 
