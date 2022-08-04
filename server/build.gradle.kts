@@ -21,15 +21,15 @@ repositories {
     mavenCentral()
 }
 
-val ktorVersion = "2.0.2"
+val ktorVersion = "2.0.3"
 val kotlinVersion: String by project
 val khrysalisVersion: String by project
 dependencies {
 
     // Security
-    implementation("com.google.protobuf:protobuf-java:3.21.1")
-    implementation("io.netty:netty-codec-http:4.1.77.Final")
-    implementation("io.netty:netty-common:4.1.77.Final")
+    implementation("com.google.protobuf:protobuf-java:3.21.3")
+    implementation("io.netty:netty-codec-http:4.1.79.Final")
+    implementation("io.netty:netty-common:4.1.79.Final")
     implementation("com.google.oauth-client:google-oauth-client:1.34.1")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.13.3")
     // End Security
@@ -63,10 +63,10 @@ dependencies {
     implementation("io.ktor:ktor-server-html-builder-jvm:$ktorVersion")
 
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactive:1.6.2")
-    implementation("de.flapdoodle.embed:de.flapdoodle.embed.mongo:3.4.6")
-    implementation("org.jetbrains.kotlinx:kotlinx-html-jvm:0.7.5")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactive:1.6.4")
+    implementation("de.flapdoodle.embed:de.flapdoodle.embed.mongo:3.4.8")
+    implementation("org.jetbrains.kotlinx:kotlinx-html-jvm:0.8.0")
 
     api("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
     api("io.ktor:ktor-serialization-kotlinx-cbor:$ktorVersion")
@@ -79,13 +79,13 @@ dependencies {
     api("com.github.abashev:vfs-s3:4.3.5")
     api("com.azure:azure-storage-blob:12.17.1")
     api("com.github.dalet-oss:vfs-azure:4.2.1")
-    api("com.charleskorn.kaml:kaml:0.45.0")
+    api("com.charleskorn.kaml:kaml:0.46.0")
     api("com.google.firebase:firebase-admin:8.2.0")
 
     implementation("org.bouncycastle:bcprov-jdk18on:1.71")
     implementation("org.bouncycastle:bcpkix-jdk18on:1.71")
 
-    api("io.lettuce:lettuce-core:6.1.8.RELEASE")
+    api("io.lettuce:lettuce-core:6.2.0.RELEASE")
 
     testImplementation("io.ktor:ktor-server-auth-jvm:$ktorVersion")
     testImplementation("io.ktor:ktor-server-auth-jwt-jvm:$ktorVersion")

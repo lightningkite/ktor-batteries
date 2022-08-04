@@ -21,6 +21,10 @@ public final class MockWriteModelApi<Model : HasId> : WriteModelApi<Model> where
         return Single.just(values.map({ (it) -> Model in self.table.addItem(item: it) }));
     }
     
+    override public func upsert(_ value: Model, id: UUIDFor<Model>) -> Single<Model> {
+        return Single.just(self.table.addItem(item: value));
+    }
+    
     override public func put(_ value: Model) -> Single<Model> {
         return Single.just(self.table.replaceItem(item: value));
     }
