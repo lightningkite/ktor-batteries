@@ -27,7 +27,7 @@ export function sharedSocket(url: string): Observable<WebSocketInterface> {
             if ((!it)) { return NEVER } else {
                 console.log(`Creating socket to ${url}`);
                 return (runOrNull(get_overrideWebSocketProvider(), _ => _(url)) ?? HttpClient.INSTANCE.webSocket(url)).pipe(switchMap((it: WebSocketInterface): Observable<WebSocketInterface> => {
-                    lastRetry = System.currentTimeMillis();
+                    lastRetry = new Date().getTime();
 //                     console.log(`Connection to ${shortUrl} established, starting pings`);
                     // Only have this observable until it fails
                     
@@ -38,7 +38,7 @@ export function sharedSocket(url: string): Observable<WebSocketInterface> {
                     
                     const timeoutAfterSeconds: Observable<WebSocketInterface> = it.read.pipe(tap((it: WebSocketFrame): void => {
 //                         console.log(`Got message from ${shortUrl}: ${it}`);
-                        if (System.currentTimeMillis() > lastRetry + 60000) {
+                        if (new Date().getTime() > lastRetry + 60000) {
                             retryTime = 1000;
                         }
                     })).pipe(timeout(10000)).pipe(switchMap((it: WebSocketFrame): Observable<WebSocketInterface> => (NEVER)));
