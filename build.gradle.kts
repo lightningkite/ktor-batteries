@@ -20,7 +20,7 @@ buildscript {
 allprojects {
     group = "com.lightningkite.ktorbatteries"
     repositories {
-//        mavenLocal()
+        mavenLocal()
         mavenCentral()
         maven(url = "https://s01.oss.sonatype.org/content/repositories/releases/")
 //        maven(url = "https://s01.oss.sonatype.org/content/repositories/snapshots/")

@@ -52,6 +52,7 @@ dependencies {
     api("io.ktor:ktor-server-content-negotiation-jvm:$ktorVersion")
     api("io.ktor:ktor-server-core-jvm:$ktorVersion")
     api("io.ktor:ktor-server-auth-jwt-jvm:$ktorVersion")
+    api("io.ktor:ktor-server-netty-jvm:$ktorVersion")
     api("io.ktor:ktor-server-cio-jvm:$ktorVersion")
     api("io.ktor:ktor-server-cors:$ktorVersion")
     api("io.ktor:ktor-server-status-pages:$ktorVersion")

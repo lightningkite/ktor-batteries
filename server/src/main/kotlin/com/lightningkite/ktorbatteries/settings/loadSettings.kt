@@ -5,6 +5,7 @@ import com.lightningkite.ktordb.ClientModule
 import io.ktor.server.application.*
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
+import io.ktor.server.netty.Netty
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import java.io.File
@@ -49,5 +50,22 @@ fun runServer(module: Application.() -> Unit) = embeddedServer(
             t.printStackTrace()
         }
     },
-    watchPaths = listOf("classes")
+    watchPaths = listOf()
+).start(wait = true)
+
+/**
+ * A helper function to start a Ktor server using GeneralServerSettings and the provided Module.
+ */
+fun runServerNetty(module: Application.() -> Unit) = embeddedServer(
+    factory = Netty,
+    port = GeneralServerSettings.instance.port,
+    host = GeneralServerSettings.instance.host,
+    module = {
+        try {
+            module()
+        } catch (t: Throwable) {
+            t.printStackTrace()
+        }
+    },
+    watchPaths = listOf()
 ).start(wait = true)

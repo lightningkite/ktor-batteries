@@ -5,6 +5,7 @@ import com.lightningkite.khrysalis.*
 import com.lightningkite.ktordb.MultiplexMessage
 import com.lightningkite.rx.mapNotNull
 import com.lightningkite.rx.okhttp.*
+import com.lightningkite.rx.onlyWhile
 import io.reactivex.rxjava3.core.Completable
 import io.reactivex.rxjava3.core.Observable
 import kotlinx.serialization.KSerializer
@@ -16,24 +17,26 @@ import java.util.concurrent.TimeUnit
 import kotlin.collections.HashMap
 import java.util.*
 
+var sharedSocketShouldBeActive: Observable<Boolean> = Observable.just(false)
+
 var _overrideWebSocketProvider: ((url: String) -> Observable<WebSocketInterface>)? = null
 private val sharedSocketCache = HashMap<String, Observable<WebSocketInterface>>()
 fun sharedSocket(url: String): Observable<WebSocketInterface> {
     return sharedSocketCache.getOrPut(url) {
         val shortUrl = url.substringBefore('?')
-//        println("Creating socket to $url")
+        println("Creating socket to $url")
         (_overrideWebSocketProvider?.invoke(url) ?: HttpClient.webSocket(url))
             .switchMap {
-//                println("Connection to $shortUrl established, starting pings")
+                println("Connection to $shortUrl established, starting pings")
                 // Only have this observable until it fails
 
                 val pingMessages: Observable<WebSocketInterface> = Observable.interval(5000L, TimeUnit.MILLISECONDS, HttpClient.responseScheduler!!).map { _ ->
-//                    println("Sending ping to $url")
+                    println("Sending ping to $url")
                     it.write.onNext(WebSocketFrame(text = ""))
                 }.switchMap { Observable.never() }
 
                 val timeoutAfterSeconds: Observable<WebSocketInterface> = it.read
-//                    .doOnNext { println("Got message from $shortUrl: ${it}") }
+                    .doOnNext { println("Got message from $shortUrl: ${it}") }
                     .timeout(10_000L, TimeUnit.MILLISECONDS, HttpClient.responseScheduler!!)
                     .switchMap { Observable.never() }
 
@@ -46,9 +49,10 @@ fun sharedSocket(url: String): Observable<WebSocketInterface> {
             .doOnError { println("Socket to $shortUrl FAILED with $it") }
             .retryWhen @SwiftReturnType("Observable<Error>") { it.delay(1000L, TimeUnit.MILLISECONDS, HttpClient.responseScheduler!!) }
             .doOnDispose {
-//                println("Disconnecting socket to $shortUrl")
+                println("Disconnecting socket to $shortUrl")
                 sharedSocketCache.remove(url)
             }
+            .onlyWhile(sharedSocketShouldBeActive)
             .replay(1)
             .refCount()
     }
