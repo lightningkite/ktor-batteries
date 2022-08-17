@@ -5,30 +5,55 @@ import RxSwift
 import RxSwiftPlus
 import Foundation
 
+public var sharedSocketShouldBeActive: Observable<Bool> = Observable.just(false)
+
 public var _overrideWebSocketProvider: ((String) -> Observable<WebSocketInterface>)? = nil
+private var retryTime = 1000
+private var lastRetry = 0
 private var sharedSocketCache = Dictionary<String, Observable<WebSocketInterface>>()
 public func sharedSocket(url: String) -> Observable<WebSocketInterface> {
     return sharedSocketCache.getOrPut(key: url) { () -> Observable<WebSocketInterface> in
         let shortUrl = url.substringBefore(delimiter: "?")
-        //        println("Creating socket to $url")
-        return (_overrideWebSocketProvider?(url) ?? HttpClient.INSTANCE.webSocket(url: url))
-            .switchMap { (it) -> Observable<WebSocketInterface> in
-            //                println("Connection to $shortUrl established, starting pings")
-            // Only have this observable until it fails
-            
-            let pingMessages: Observable<WebSocketInterface> = Observable<Int>.interval(RxTimeInterval.milliseconds(Int(5000)), scheduler: HttpClient.INSTANCE.responseScheduler!).map { (_) -> Void in it.write.onNext(WebSocketFrame(text: "")) }.switchMap { (it) -> Observable<WebSocketInterface> in Observable.never() }
-            
-            let timeoutAfterSeconds: Observable<WebSocketInterface> = it.read
-                .timeout(.milliseconds(10000), scheduler: MainScheduler.instance)
-                .switchMap { (it) -> Observable<WebSocketInterface> in Observable.never() }
-            
-            return Observable.merge(Observable.just(it), pingMessages, timeoutAfterSeconds)
-        }
-            .doOnError { (it) -> Void in print("Socket to \(String(kotlin: shortUrl)) FAILED with \(it)") }
-            .retryWhen( { (it) -> Observable<Error> in it.delay(.milliseconds(1000), scheduler: MainScheduler.instance) })
-            .doOnDispose { () -> Void in sharedSocketCache.removeValue(forKey: url) }
-            .replay(1)
-            .refCount()
+        return sharedSocketShouldBeActive.switchMap { (it) -> Observable<WebSocketInterface> in run { () -> Observable<WebSocketInterface> in
+            if (!it) { return (Observable.never() as Observable<WebSocketInterface>) } else {
+                print("Creating socket to \(String(kotlin: url))")
+                return (_overrideWebSocketProvider?(url) ?? HttpClient.INSTANCE.webSocket(url: url))
+                    .switchMap { (it) -> Observable<WebSocketInterface> in
+                    lastRetry = Int(Date().timeIntervalSince1970 * 1000.0)
+//                     print("Connection to \(String(kotlin: shortUrl)) established, starting pings")
+                    // Only have this observable until it fails
+                    
+                    let pingMessages: Observable<WebSocketInterface> = Observable<Int>.interval(RxTimeInterval.milliseconds(Int(5000)), scheduler: HttpClient.INSTANCE.responseScheduler!).map { (_) -> Void in
+//                         print("Sending ping to \(String(kotlin: url))")
+                        return it.write.onNext(WebSocketFrame(text: ""))
+                    }.switchMap { (it) -> Observable<WebSocketInterface> in Observable.never() }
+                    
+                    let timeoutAfterSeconds: Observable<WebSocketInterface> = it.read
+                        .doOnNext { (it) -> Void in
+//                         print("Got message from \(String(kotlin: shortUrl)): \(it)")
+                        if Int(Date().timeIntervalSince1970 * 1000.0) > lastRetry + 60000 {
+                            retryTime = 1000
+                        }
+                    }
+                        .timeout(.milliseconds(10000), scheduler: MainScheduler.instance)
+                        .switchMap { (it) -> Observable<WebSocketInterface> in Observable.never() }
+                    
+                    return Observable.merge(Observable.just(it), pingMessages, timeoutAfterSeconds)
+                }
+                    .doOnError { (it) -> Void in print("Socket to \(String(kotlin: shortUrl)) FAILED with \(it)") }
+                    .retry(when:  { (it) -> Observable<Error> in
+                    let temp = retryTime
+                    retryTime = temp * 2
+                    return it.delay(.milliseconds(temp), scheduler: MainScheduler.instance)
+                })
+                    .doOnDispose { () -> Void in
+                    print("Disconnecting socket to \(String(kotlin: shortUrl))")
+                    sharedSocketCache.removeValue(forKey: url)
+                }
+                    .replay(1)
+                    .refCount()
+            }
+        } }
     }
 }
 

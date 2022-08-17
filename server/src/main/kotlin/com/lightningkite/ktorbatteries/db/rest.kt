@@ -13,8 +13,11 @@ import io.ktor.util.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.serialization.properties.decodeFromStringMap
 import kotlinx.serialization.properties.encodeToStringMap
+import org.slf4j.LoggerFactory
 import java.util.*
 import kotlin.reflect.KProperty1
+
+val logger = LoggerFactory.getLogger("com.Lightningkite.ktorbatteries.server.db")
 
 /**
  * Creates a websocket end point to receive live updates for the model.
@@ -24,7 +27,7 @@ import kotlin.reflect.KProperty1
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @KtorDsl
-inline fun <reified USER, reified T : HasId<ID>, reified ID: Comparable<ID>> Route.restApiWebsocket(
+inline fun <reified USER, reified T : HasId<ID>, reified ID : Comparable<ID>> Route.restApiWebsocket(
     path: String = "",
     crossinline getCollection: suspend (principal: USER) -> FieldCollection<T>
 ) = route(path) {
@@ -36,8 +39,10 @@ inline fun <reified USER, reified T : HasId<ID>, reified ID: Comparable<ID>> Rou
         description = "Gets a changing list of ${modelName}s that match the given query.",
         errorCases = listOf(),
     ) { user ->
+        logger.debug("User $user connected a web socket for $modelName")
         val secured = getCollection(user)
         incoming.flatMapLatest { query ->
+            logger.debug("User $user queried for ${query} in a web socket for $modelName")
             secured.watch(query.condition)
                 .map { it.listChange() }
                 .onStart {

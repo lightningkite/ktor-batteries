@@ -63,6 +63,7 @@ com.lightningkite.ktordb.aggregate>kotlin.sequences.Sequencekotlin.Double
 com.lightningkite.ktordb.times>com.lightningkite.ktordb.PropChaincom.lightningkite.ktordb.times.K, com.lightningkite.ktordb.times.T
 com.lightningkite.ktordb.condition>com.lightningkite.ktordb.PropChaincom.lightningkite.ktordb.condition.K, com.lightningkite.ktordb.condition.T
 com.lightningkite.ktordb.apply>kotlin.collections.Listcom.lightningkite.ktordb.apply.T
+com.lightningkite.ktordb.live.sharedSocketShouldBeActive
 com.lightningkite.ktordb.lt>com.lightningkite.ktordb.PropChaincom.lightningkite.ktordb.lt.K, com.lightningkite.ktordb.lt.T
 com.lightningkite.ktordb.coerceAtMost>com.lightningkite.ktordb.PropChaincom.lightningkite.ktordb.coerceAtMost.K, com.lightningkite.ktordb.coerceAtMost.T
 com.lightningkite.ktordb.FullReadModelApi

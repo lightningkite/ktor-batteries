@@ -7,34 +7,55 @@ import { NEVER, Observable, filter, interval, merge, of, map as rMap } from 'rxj
 import { delay, finalize, map, publishReplay, refCount, retryWhen, switchMap, tap, timeout } from 'rxjs/operators'
 import { v4 as randomUuidV4 } from 'uuid'
 
+//! Declares com.lightningkite.ktordb.live.sharedSocketShouldBeActive
+export let _sharedSocketShouldBeActive: Observable<boolean> = of(false);
+export function getSharedSocketShouldBeActive(): Observable<boolean> { return _sharedSocketShouldBeActive; }
+export function setSharedSocketShouldBeActive(value: Observable<boolean>) { _sharedSocketShouldBeActive = value; }
+
 //! Declares com.lightningkite.ktordb.live._overrideWebSocketProvider
 export let __overrideWebSocketProvider: (((url: string) => Observable<WebSocketInterface>) | null) = null;
 export function get_overrideWebSocketProvider(): (((url: string) => Observable<WebSocketInterface>) | null) { return __overrideWebSocketProvider; }
 export function set_overrideWebSocketProvider(value: (((url: string) => Observable<WebSocketInterface>) | null)) { __overrideWebSocketProvider = value; }
+let retryTime = 1000;
+let lastRetry = 0;
 const sharedSocketCache = new Map<string, Observable<WebSocketInterface>>();
 //! Declares com.lightningkite.ktordb.live.sharedSocket
 export function sharedSocket(url: string): Observable<WebSocketInterface> {
     return xMutableMapGetOrPut<string, Observable<WebSocketInterface>>(sharedSocketCache, url, (): Observable<WebSocketInterface> => {
         const shortUrl = xStringSubstringBefore(url, '?', undefined);
-        //        println("Creating socket to $url")
-        return (runOrNull(get_overrideWebSocketProvider(), _ => _(url)) ?? HttpClient.INSTANCE.webSocket(url)).pipe(switchMap((it: WebSocketInterface): Observable<WebSocketInterface> => {
-            //                println("Connection to $shortUrl established, starting pings")
-            // Only have this observable until it fails
-            
-            const pingMessages: Observable<WebSocketInterface> = interval(5000).pipe(map((_0: number): void => {
-                //                    println("Sending ping to $url")
-                return it.write.next({ text: "", binary: null });
-            })).pipe(switchMap((it: void): Observable<WebSocketInterface> => (NEVER)));
-            
-            const timeoutAfterSeconds: Observable<WebSocketInterface> = it.read.pipe(timeout(10000)).pipe(switchMap((it: WebSocketFrame): Observable<WebSocketInterface> => (NEVER)));
-            
-            return merge(of(it), pingMessages, timeoutAfterSeconds);
-        })).pipe(tap(undefined, (it: any): void => {
-            console.log(`Socket to ${shortUrl} FAILED with ${it}`);
-        })).pipe(retryWhen( (it: Observable<any>): Observable<any> => (it.pipe(delay(1000))))).pipe(finalize((): void => {
-            //                println("Disconnecting socket to $shortUrl")
-            sharedSocketCache.delete(url);
-        })).pipe(publishReplay(1)).pipe(refCount());
+        return getSharedSocketShouldBeActive().pipe(switchMap((it: boolean): Observable<WebSocketInterface> => (((): Observable<WebSocketInterface> => {
+            if ((!it)) { return NEVER } else {
+                console.log(`Creating socket to ${url}`);
+                return (runOrNull(get_overrideWebSocketProvider(), _ => _(url)) ?? HttpClient.INSTANCE.webSocket(url)).pipe(switchMap((it: WebSocketInterface): Observable<WebSocketInterface> => {
+                    lastRetry = System.currentTimeMillis();
+//                     console.log(`Connection to ${shortUrl} established, starting pings`);
+                    // Only have this observable until it fails
+                    
+                    const pingMessages: Observable<WebSocketInterface> = interval(5000).pipe(map((_0: number): void => {
+//                         console.log(`Sending ping to ${url}`);
+                        return it.write.next({ text: "", binary: null });
+                    })).pipe(switchMap((it: void): Observable<WebSocketInterface> => (NEVER)));
+                    
+                    const timeoutAfterSeconds: Observable<WebSocketInterface> = it.read.pipe(tap((it: WebSocketFrame): void => {
+//                         console.log(`Got message from ${shortUrl}: ${it}`);
+                        if (System.currentTimeMillis() > lastRetry + 60000) {
+                            retryTime = 1000;
+                        }
+                    })).pipe(timeout(10000)).pipe(switchMap((it: WebSocketFrame): Observable<WebSocketInterface> => (NEVER)));
+                    
+                    return merge(of(it), pingMessages, timeoutAfterSeconds);
+                })).pipe(tap(undefined, (it: any): void => {
+                    console.log(`Socket to ${shortUrl} FAILED with ${it}`);
+                })).pipe(retryWhen( (it: Observable<any>): Observable<any> => {
+                    const temp = retryTime;
+                    retryTime = temp * 2;
+                    return it.pipe(delay(temp));
+                })).pipe(finalize((): void => {
+                    console.log(`Disconnecting socket to ${shortUrl}`);
+                    sharedSocketCache.delete(url);
+                })).pipe(publishReplay(1)).pipe(refCount());
+            }
+        })())));
     });
 }
 

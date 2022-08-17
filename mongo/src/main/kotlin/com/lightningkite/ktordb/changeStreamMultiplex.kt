@@ -11,11 +11,16 @@ import org.bson.BsonBinarySubType
 import org.bson.BsonType
 import org.litote.kmongo.coroutine.CoroutineCollection
 import org.litote.kmongo.coroutine.coroutine
+import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedDeque
 import kotlin.collections.HashMap
 
+
+val logger = LoggerFactory.getLogger("com.Lightningkite.ktorbatteries.mongo")
+
 private val activeMultiplex = ConcurrentHashMap<MongoCollection<*>, Flow<EntryChange<*>>>()
+
 private class PrecomputedHash<T>(val item: T, val hash: Int) {
     override fun hashCode(): Int {
         return hash
@@ -44,8 +49,8 @@ fun <T: Any> CoroutineCollection<T>.watchMultiplex(): Flow<EntryChange<T>> {
             )
         ).coroutine
             .toFlow()
-//            .onStart { println("Started listening") }
-//            .onCompletion { println("Stopped listening") }
+            .onStart { logger.debug("Started listening to ${collection.namespace.collectionName}") }
+            .onCompletion { logger.debug("Stopped listening to ${collection.namespace.collectionName}") }
             .mapNotNull {
                 val rawKey = it.documentKey?.get("_id") ?: throw IllegalStateException("Raw key missing. Got ${it}")
                 val key: Any = when(rawKey.bsonType) {
@@ -83,18 +88,24 @@ fun <T: Any> CoroutineCollection<T>.watchMultiplex(): Flow<EntryChange<T>> {
                         cache[key] = new
                         EntryChange(oldNN, new)
                     }
+
                     OperationType.REPLACE -> {
                         val oldNN = old ?: findOneById(key)
-                        val new = codec.fromDocument(it.fullDocument ?: throw IllegalStateException("Inserted document missing. Got ${it}"), registry)
+                        val new = codec.fromDocument(
+                            it.fullDocument ?: throw IllegalStateException("Inserted document missing. Got ${it}"),
+                            registry
+                        )
                         cache[key] = new
                         EntryChange(oldNN, new)
                     }
+
                     else -> throw Error()
+                }.also {
+                    logger.debug("Got $it while listening to ${collection.namespace.collectionName}")
                 }
             }
             .retry {
-                System.err.println("While processing change stream:")
-                it.printStackTrace()
+                logger.warn("Error While processing change stream:", it)
                 delay(1000L)
                 true
             }
