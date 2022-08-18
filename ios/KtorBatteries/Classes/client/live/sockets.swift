@@ -10,7 +10,7 @@ public var sharedSocketShouldBeActive: Observable<Bool> = Observable.just(false)
 public var _overrideWebSocketProvider: ((String) -> Observable<WebSocketInterface>)? = nil
 private var retryTime = 1000
 private var lastRetry = 0
-private var sharedSocketCache = (HashMap() as Dictionary<String, Observable<WebSocketInterface>>)
+private var sharedSocketCache = Dictionary<String, Observable<WebSocketInterface>>()
 public func sharedSocket(url: String) -> Observable<WebSocketInterface> {
     return sharedSocketCache.getOrPut(key: url) { () -> Observable<WebSocketInterface> in sharedSocketShouldBeActive
             .distinctUntilChanged()
