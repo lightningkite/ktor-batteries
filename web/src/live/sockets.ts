@@ -4,7 +4,7 @@ import { MultiplexMessage } from '../db/MultiplexMessage'
 import { ReifiedType, runOrNull, xMutableMapGetOrPut, xStringSubstringBefore } from '@lightningkite/khrysalis-runtime'
 import { HttpClient, JSON2, WebSocketFrame, WebSocketInterface, isNonNull } from '@lightningkite/rxjs-plus'
 import { NEVER, Observable, filter, interval, merge, of, map as rMap } from 'rxjs'
-import { delay, finalize, map, publishReplay, refCount, retryWhen, switchMap, tap, timeout } from 'rxjs/operators'
+import { delay, distinctUntilChanged, finalize, map, publishReplay, refCount, retryWhen, switchMap, tap, timeout } from 'rxjs/operators'
 import { v4 as randomUuidV4 } from 'uuid'
 
 //! Declares com.lightningkite.ktordb.live.sharedSocketShouldBeActive
@@ -21,9 +21,9 @@ let lastRetry = 0;
 const sharedSocketCache = new Map<string, Observable<WebSocketInterface>>();
 //! Declares com.lightningkite.ktordb.live.sharedSocket
 export function sharedSocket(url: string): Observable<WebSocketInterface> {
-    return xMutableMapGetOrPut<string, Observable<WebSocketInterface>>(sharedSocketCache, url, (): Observable<WebSocketInterface> => {
+    return xMutableMapGetOrPut<string, Observable<WebSocketInterface>>(sharedSocketCache, url, (): Observable<WebSocketInterface> => (getSharedSocketShouldBeActive().pipe(distinctUntilChanged()).pipe(switchMap((it: boolean): Observable<WebSocketInterface> => {
         const shortUrl = xStringSubstringBefore(url, '?', undefined);
-        return getSharedSocketShouldBeActive().pipe(switchMap((it: boolean): Observable<WebSocketInterface> => (((): Observable<WebSocketInterface> => {
+        return ((): Observable<WebSocketInterface> => {
             if ((!it)) { return NEVER } else {
                 console.log(`Creating socket to ${url}`);
                 return (runOrNull(get_overrideWebSocketProvider(), _ => _(url)) ?? HttpClient.INSTANCE.webSocket(url)).pipe(switchMap((it: WebSocketInterface): Observable<WebSocketInterface> => {
@@ -52,11 +52,10 @@ export function sharedSocket(url: string): Observable<WebSocketInterface> {
                     return it.pipe(delay(temp));
                 })).pipe(finalize((): void => {
                     console.log(`Disconnecting socket to ${shortUrl}`);
-                    sharedSocketCache.delete(url);
-                })).pipe(publishReplay(1)).pipe(refCount());
+                }));
             }
-        })())));
-    });
+        })()
+    })).pipe(publishReplay(1)).pipe(refCount())));
 }
 
 //! Declares com.lightningkite.ktordb.live.MultiplexedWebsocketPart
@@ -81,7 +80,7 @@ export function multiplexedSocket<IN extends any, OUT extends any>(url: string, 
     const channel = randomUuidV4();
     let lastSocket: (WebSocketInterface | null) = null;
     return sharedSocket(url).pipe(map((it: WebSocketInterface): WebSocketIsh<IN, OUT> => {
-        //            println("Setting up socket to $shortUrl with $path")
+        //            println("Setting up channel on socket to $shortUrl with $path")
         lastSocket = it;
         it.write.next({ text: JSON.stringify(new MultiplexMessage(channel, path, true, undefined, undefined)), binary: null });
         const part = new MultiplexedWebsocketPart(it.read.pipe(rMap((it: WebSocketFrame): (string | null) => {
@@ -101,9 +100,9 @@ export function multiplexedSocket<IN extends any, OUT extends any>(url: string, 
         return typedPart;
     })).pipe(finalize((): void => {
         //            println("Disconnecting channel on socket to $shortUrl with $path")
-        const temp41 = (lastSocket?.write ?? null);
-        if(temp41 !== null) {
-            temp41.next({ text: JSON.stringify(new MultiplexMessage(channel, path, undefined, true, undefined)), binary: null })
+        const temp50 = (lastSocket?.write ?? null);
+        if(temp50 !== null) {
+            temp50.next({ text: JSON.stringify(new MultiplexMessage(channel, path, undefined, true, undefined)), binary: null })
         };
     }));
 }
