@@ -1,8 +1,6 @@
 package com.lightningkite.ktorbatteries.typed
 
-import com.lightningkite.ktorbatteries.routes.docName
 import com.lightningkite.ktorbatteries.serialization.Serialization
-import io.ktor.server.auth.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.util.*
@@ -80,6 +78,8 @@ inline fun <reified USER, reified INPUT, reified OUTPUT> Route.apiWebsocket(
                             Serialization.json.decodeFromString(text)
                         }
                     }
-            ), this.call.user<USER>())
+            ),
+            this.call.user<USER>()
+        )
     }
 }

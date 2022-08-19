@@ -2,7 +2,6 @@ package com.lightningkite.ktorbatteries.db
 
 import com.lightningkite.ktorbatteries.SetOnce
 import com.lightningkite.ktorbatteries.SettingSingleton
-import com.lightningkite.ktorbatteries.mongo.mongoDb
 import com.lightningkite.ktorbatteries.serialization.Serialization
 import com.lightningkite.ktorbatteries.serverhealth.HealthCheckable
 import com.lightningkite.ktorbatteries.serverhealth.HealthStatus
@@ -18,10 +17,7 @@ import kotlinx.serialization.serializer
 import org.bson.UuidRepresentation
 import org.litote.kmongo.reactivestreams.KMongo
 import java.io.File
-import kotlin.reflect.KClass
-import kotlin.reflect.KClassifier
 import kotlin.reflect.KType
-import kotlin.reflect.KTypeProjection
 
 /**
  * The database object created and defined by the DatabaseSettings.
@@ -76,7 +72,7 @@ data class DatabaseSettings(
     override suspend fun healthCheck(): HealthStatus =
         try {
             withTimeout(5000L) {
-                mongoDb.database.listCollectionNames()
+                (db as? MongoDatabase)?.database?.listCollectionNames()
                 HealthStatus(HealthStatus.Level.OK)
             }
         } catch (e: Exception) {

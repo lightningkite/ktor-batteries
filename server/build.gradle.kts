@@ -21,13 +21,14 @@ repositories {
     mavenCentral()
 }
 
-val ktorVersion = "2.0.3"
+val coroutinesVersion: String by project
+val ktorVersion: String by project
 val kotlinVersion: String by project
 val khrysalisVersion: String by project
 dependencies {
 
     // Security
-    implementation("com.google.protobuf:protobuf-java:3.21.3")
+    implementation("com.google.protobuf:protobuf-java:3.21.4")
     implementation("io.netty:netty-codec-http:4.1.79.Final")
     implementation("io.netty:netty-common:4.1.79.Final")
     implementation("com.google.oauth-client:google-oauth-client:1.34.1")
@@ -64,24 +65,22 @@ dependencies {
     implementation("io.ktor:ktor-server-html-builder-jvm:$ktorVersion")
 
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactive:1.6.4")
-    implementation("de.flapdoodle.embed:de.flapdoodle.embed.mongo:3.4.8")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactive:$coroutinesVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-html-jvm:0.8.0")
 
     api("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
     api("io.ktor:ktor-serialization-kotlinx-cbor:$ktorVersion")
     api("de.brudaswen.kotlinx.serialization:kotlinx-serialization-csv:2.0.0")
-    api("org.jetbrains.kotlinx:kotlinx-serialization-properties:1.3.3")
     api("io.github.pdvrieze.xmlutil:serialization-jvm:0.84.2")
 
     api("org.apache.commons:commons-email:1.5")
     api("org.apache.commons:commons-vfs2:2.9.0")
-    api("com.github.abashev:vfs-s3:4.3.5")
-    api("com.azure:azure-storage-blob:12.17.1")
+    api("com.github.abashev:vfs-s3:4.3.6")
+    api("com.azure:azure-storage-blob:12.18.0")
     api("com.github.dalet-oss:vfs-azure:4.2.1")
     api("com.charleskorn.kaml:kaml:0.46.0")
-    api("com.google.firebase:firebase-admin:8.2.0")
+    api("com.google.firebase:firebase-admin:9.0.0")
 
     implementation("org.bouncycastle:bcprov-jdk18on:1.71")
     implementation("org.bouncycastle:bcpkix-jdk18on:1.71")

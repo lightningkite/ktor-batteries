@@ -18,12 +18,12 @@ repositories {
     maven { url = uri("https://maven.pkg.jetbrains.space/public/p/ktor/eap") }
 }
 
-val kotlinVersion:String by project
+val coroutinesVersion: String by project
+val kotlinVersion: String by project
 dependencies {
     api(project(":shared"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
-    api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
 
     kspTest(project(":processor"))
     testImplementation(project(":client"))

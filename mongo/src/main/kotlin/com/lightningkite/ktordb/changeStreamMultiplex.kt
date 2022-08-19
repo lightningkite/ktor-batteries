@@ -11,13 +11,11 @@ import org.bson.BsonBinarySubType
 import org.bson.BsonType
 import org.litote.kmongo.coroutine.CoroutineCollection
 import org.litote.kmongo.coroutine.coroutine
-import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedDeque
 import kotlin.collections.HashMap
 
 
-val logger = LoggerFactory.getLogger("com.Lightningkite.ktorbatteries.mongo")
 
 private val activeMultiplex = ConcurrentHashMap<MongoCollection<*>, Flow<EntryChange<*>>>()
 
@@ -49,8 +47,6 @@ fun <T: Any> CoroutineCollection<T>.watchMultiplex(): Flow<EntryChange<T>> {
             )
         ).coroutine
             .toFlow()
-            .onStart { logger.debug("Started listening to ${collection.namespace.collectionName}") }
-            .onCompletion { logger.debug("Stopped listening to ${collection.namespace.collectionName}") }
             .mapNotNull {
                 val rawKey = it.documentKey?.get("_id") ?: throw IllegalStateException("Raw key missing. Got ${it}")
                 val key: Any = when(rawKey.bsonType) {
@@ -100,8 +96,6 @@ fun <T: Any> CoroutineCollection<T>.watchMultiplex(): Flow<EntryChange<T>> {
                     }
 
                     else -> throw Error()
-                }.also {
-                    logger.debug("Got $it while listening to ${collection.namespace.collectionName}")
                 }
             }
             .retry {
