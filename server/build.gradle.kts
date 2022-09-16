@@ -28,11 +28,11 @@ val khrysalisVersion: String by project
 dependencies {
 
     // Security
-    implementation("com.google.protobuf:protobuf-java:3.21.4")
-    implementation("io.netty:netty-codec-http:4.1.79.Final")
-    implementation("io.netty:netty-common:4.1.79.Final")
+    implementation("com.google.protobuf:protobuf-java:3.21.5")
+    implementation("io.netty:netty-codec-http:4.1.81.Final")
+    implementation("io.netty:netty-common:4.1.81.Final")
     implementation("com.google.oauth-client:google-oauth-client:1.34.1")
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.13.3")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.13.4")
     // End Security
 
     api(project(":db"))
@@ -43,7 +43,7 @@ dependencies {
 
     api("io.sentry:sentry:1.7.30")
     api("io.sentry:sentry-logback:1.7.30")
-    implementation("ch.qos.logback:logback-classic:1.2.11")
+    implementation("ch.qos.logback:logback-classic:1.4.0")
 
     api("com.lightningkite:kotliner-cli:1.0.3")
     implementation("com.lightningkite.khrysalis:jvm-runtime:$khrysalisVersion")
@@ -77,13 +77,13 @@ dependencies {
     api("org.apache.commons:commons-email:1.5")
     api("org.apache.commons:commons-vfs2:2.9.0")
     api("com.github.abashev:vfs-s3:4.3.6")
-    api("com.azure:azure-storage-blob:12.18.0")
-    api("com.github.dalet-oss:vfs-azure:4.2.1")
-    api("com.charleskorn.kaml:kaml:0.46.0")
+    api("com.azure:azure-storage-blob:12.19.0")
+    api("com.github.dalet-oss:vfs-azure:4.2.2")
+    api("com.charleskorn.kaml:kaml:0.47.0")
     api("com.google.firebase:firebase-admin:9.0.0")
 
-    implementation("org.bouncycastle:bcprov-jdk18on:1.71")
-    implementation("org.bouncycastle:bcpkix-jdk18on:1.71")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.71.1")
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.71.1")
 
     api("io.lettuce:lettuce-core:6.2.0.RELEASE")
 

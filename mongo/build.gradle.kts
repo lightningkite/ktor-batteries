@@ -24,9 +24,9 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactive:$coroutinesVersion")
-    implementation("de.flapdoodle.embed:de.flapdoodle.embed.mongo:3.4.8")
+    implementation("de.flapdoodle.embed:de.flapdoodle.embed.mongo:3.4.9")
     implementation("com.github.jershell:kbson:0.4.5")
-    api("org.litote.kmongo:kmongo-coroutine-serialization:4.6.1")
+    api("org.litote.kmongo:kmongo-coroutine-serialization:4.7.1")
 
     kspTest(project(":processor"))
     testImplementation(project(":client"))

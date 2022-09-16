@@ -61,7 +61,7 @@ object TypescriptSdk {
                         append("export enum ")
                         it.write(out)
                         appendLine(" {")
-                        for(index in 0 until it.elementsCount) {
+                        for (index in 0 until it.elementsCount) {
                             append("    ")
                             append(it.getElementName(index))
                             append(" = \"")
@@ -71,6 +71,8 @@ object TypescriptSdk {
                         }
                         appendLine("}")
                     }
+
+                    else -> {}
                 }
             }
 
