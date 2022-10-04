@@ -10,6 +10,107 @@ import kotlinx.coroutines.withContext
  * The concrete implementation of NotificationInterface that will use Firebase Messaging to send push notifications to clients.
  */
 object FcmNotificationInterface : NotificationInterface {
+
+    override suspend fun send(
+        targets: List<String>,
+        notification: Notification?,
+        data: Map<String, String>?,
+        android: Android?,
+        ios: iOS?,
+        web: Web?
+    ) {
+
+        val builder = with(MulticastMessage.builder()) {
+            if (data != null)
+                putAllData(data)
+            setApnsConfig(
+                with(ApnsConfig.builder()) {
+                    if (notification != null) {
+                        setFcmOptions(
+                            ApnsFcmOptions
+                                .builder()
+                                .setImage(notification.imageUrl)
+                                .build()
+                        )
+                    }
+                    setAps(with(Aps.builder()) {
+                        if (ios != null)
+                            if (ios.critical && ios.sound != null)
+                                setSound(
+                                    CriticalSound.builder()
+                                        .setCritical(true)
+                                        .setName(ios.sound)
+                                        .setVolume(1.0)
+                                        .build()
+                                )
+                            else {
+                                setSound(ios.sound)
+                            }
+                        build()
+                    })
+                    build()
+                }
+            )
+            if (android != null)
+                setAndroidConfig(
+                    with(AndroidConfig.builder()) {
+                        setPriority(android.priority.toAndroid())
+                        setNotification(
+                            AndroidNotification.builder()
+                                .setChannelId(android.channel)
+                                .setSound(android.sound)
+                                .build()
+                        )
+                        build()
+                    }
+                )
+            setWebpushConfig(
+                with(
+                    WebpushConfig
+                        .builder()
+                ) {
+                    if (web != null) {
+                        putAllData(web.data)
+                    }
+                    if (notification != null)
+                        setNotification(
+                            WebpushNotification.builder()
+                                .setTitle(notification.title)
+                                .setBody(notification.body)
+                                .setImage(notification.imageUrl)
+                                .build()
+                        )
+                    build()
+                }
+            )
+            if (notification != null) {
+                setNotification(
+                    com.google.firebase.messaging.Notification.builder()
+                        .setTitle(notification.title)
+                        .setBody(notification.body)
+                        .setImage(notification.imageUrl)
+                        .build()
+                )
+            }
+            this
+        }
+
+
+        targets
+            .chunked(500)
+            .map {
+                builder
+                    .addAllTokens(it)
+                    .build()
+            }
+            .forEach {
+                withContext(Dispatchers.IO) {
+                    FirebaseMessaging.getInstance().sendMulticast(it)
+                }
+            }
+
+    }
+
     /**
      * Sends a simple notification and data. No custom options are set beyond what is provided.
      * If you need a more complicated set of messages you should use the other functions.
@@ -88,7 +189,7 @@ object FcmNotificationInterface : NotificationInterface {
                     )
                 if (includeNotification)
                     setNotification(
-                        Notification.builder()
+                        com.google.firebase.messaging.Notification.builder()
                             .setTitle(title)
                             .setBody(body)
                             .setImage(imageUrl)
@@ -111,3 +212,7 @@ object FcmNotificationInterface : NotificationInterface {
     }
 }
 
+private fun Priority.toAndroid(): AndroidConfig.Priority = when (this) {
+    Priority.HIGH -> AndroidConfig.Priority.HIGH
+    Priority.NORMAL -> AndroidConfig.Priority.NORMAL
+}
