@@ -22,7 +22,7 @@ class LiveObserveModelApi<Model : HasId<UUID>>(
         ): LiveObserveModelApi<Model> = LiveObserveModelApi(
             openSocket = { query ->
                 multiplexedSocket<ListChange<Model>, Query<Model>>(
-                    "$multiplexUrl?jwt=$token",
+                    "$multiplexUrl?jwt=$token&${headers.entries.joinToString("&") { "${it.key}=${it.value}" }}",
                     path
                 )
                     .switchMap {

@@ -1,10 +1,11 @@
-package com.lightningkite.ktorbatteries.auth
+ package com.lightningkite.ktorbatteries.auth
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.JWTCreator
 import com.auth0.jwt.algorithms.Algorithm
 import com.auth0.jwt.exceptions.JWTVerificationException
 import com.auth0.jwt.interfaces.DecodedJWT
+import com.lightningkite.ktorbatteries.ServerRequestCounter
 import com.lightningkite.ktorbatteries.db.database
 import com.lightningkite.ktorbatteries.email.Attachment
 import com.lightningkite.ktorbatteries.email.EmailSettings
@@ -152,7 +153,10 @@ fun AuthenticationConfig.quickJwt(
                     value
                 }
                 ?: it.request.cookies[HttpHeaders.Authorization]
-                ?: return@authHeader null
+            if (token == null) {
+                ServerRequestCounter.authFailures.incrementAndGet()
+                return@authHeader null
+            }
             HttpAuthHeader.Single(AuthScheme.Bearer, token)
         }
         verifier(
@@ -163,7 +167,10 @@ fun AuthenticationConfig.quickJwt(
                 .build()
         )
         validate { credential: JWTCredential ->
-            validate(credential)
+            val result = validate(credential)
+            if (result == null)
+                ServerRequestCounter.authFailures.incrementAndGet()
+            result
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.lightningkite.ktorbatteries.typed
 
+import com.lightningkite.ktorbatteries.ServerRequestCounter
 import com.lightningkite.ktorbatteries.routes.fullPath
 import com.lightningkite.ktorbatteries.serialization.Serialization
 import com.lightningkite.ktordb.MultiplexMessage
@@ -24,8 +25,140 @@ import kotlin.reflect.safeCast
 
 private data class OpenChannel(val channel: Channel<String>, val job: Job)
 
+fun handleIncomingCount(header: String?, message: String) {
+    ServerRequestCounter.socketChannelMessagesReceived.incrementAndGet()
+    val size = message.toByteArray().size.toLong()
+    when {
+        header == null -> {
+            ServerRequestCounter.otherDeviceSocketSent.incrementAndGet()
+            ServerRequestCounter.otherSocketDataTotal.addAndGet(size)
+        }
+
+        header.contains("WEB") -> {
+            ServerRequestCounter.webSocketSent.incrementAndGet()
+            ServerRequestCounter.webSocketDataTotal.addAndGet(size)
+        }
+
+        header.contains("DESKTOP") -> {
+            ServerRequestCounter.desktopSocketSent.incrementAndGet()
+            ServerRequestCounter.destkopSocketDataTotal.addAndGet(size)
+        }
+
+        header.contains("IOS") -> {
+            ServerRequestCounter.iOSSocketSent.incrementAndGet()
+            ServerRequestCounter.iOSSocketDataTotal.addAndGet(size)
+        }
+
+        header.contains("ANDROID") -> {
+            ServerRequestCounter.androidSocketSent.incrementAndGet()
+            ServerRequestCounter.androidSocketDataTotal.addAndGet(size)
+        }
+
+        else -> {
+            ServerRequestCounter.otherDeviceSocketSent.incrementAndGet()
+            ServerRequestCounter.otherSocketDataTotal.addAndGet(size)
+        }
+    }
+}
+
+fun handleOutgoingCount(header: String?, message: String) {
+    ServerRequestCounter.socketChannelMessagesSent.incrementAndGet()
+    val size = message.toByteArray().size.toLong()
+    when {
+        header == null -> {
+            ServerRequestCounter.otherDeviceSocketReceived.incrementAndGet()
+            ServerRequestCounter.otherSocketDataTotal.addAndGet(size)
+        }
+
+        header.contains("WEB") -> {
+            ServerRequestCounter.webSocketReceived.incrementAndGet()
+            ServerRequestCounter.webSocketDataTotal.addAndGet(size)
+        }
+
+        header.contains("DESKTOP") -> {
+            ServerRequestCounter.desktopSocketReceived.incrementAndGet()
+            ServerRequestCounter.destkopSocketDataTotal.addAndGet(size)
+        }
+
+        header.contains("IOS") -> {
+            ServerRequestCounter.iOSSocketReceived.incrementAndGet()
+            ServerRequestCounter.iOSSocketDataTotal.addAndGet(size)
+        }
+
+        header.contains("ANDROID") -> {
+            ServerRequestCounter.androidSocketReceived.incrementAndGet()
+            ServerRequestCounter.androidSocketDataTotal.addAndGet(size)
+        }
+
+        else -> {
+            ServerRequestCounter.otherDeviceSocketReceived.incrementAndGet()
+            ServerRequestCounter.otherSocketDataTotal.addAndGet(size)
+        }
+    }
+}
+
+fun handleSocketOpened(header: String?) {
+    ServerRequestCounter.socketsOpened.incrementAndGet()
+    when {
+        header == null -> {
+            ServerRequestCounter.otherDeviceSocketsOpened.incrementAndGet()
+        }
+
+        header.contains("WEB") -> {
+            ServerRequestCounter.webSocketsOpened.incrementAndGet()
+        }
+
+        header.contains("DESKTOP") -> {
+            ServerRequestCounter.desktopSocketsOpened.incrementAndGet()
+        }
+
+        header.contains("IOS") -> {
+            ServerRequestCounter.iOSSocketsOpened.incrementAndGet()
+        }
+
+        header.contains("ANDROID") -> {
+            ServerRequestCounter.androidSocketsOpened.incrementAndGet()
+        }
+
+        else -> {
+            ServerRequestCounter.otherDeviceSocketsOpened.incrementAndGet()
+        }
+    }
+}
+
+fun handleSocketClosed(header: String?) {
+    ServerRequestCounter.socketsClosed.incrementAndGet()
+    when {
+        header == null -> {
+            ServerRequestCounter.otherDeviceSocketsClosed.incrementAndGet()
+        }
+
+        header.contains("WEB") -> {
+            ServerRequestCounter.webSocketsClosed.incrementAndGet()
+        }
+
+        header.contains("DESKTOP") -> {
+            ServerRequestCounter.desktopSocketsClosed.incrementAndGet()
+        }
+
+        header.contains("IOS") -> {
+            ServerRequestCounter.iOSSocketsClosed.incrementAndGet()
+        }
+
+        header.contains("ANDROID") -> {
+            ServerRequestCounter.androidSocketsClosed.incrementAndGet()
+        }
+
+        else -> {
+            ServerRequestCounter.otherDeviceSocketsClosed.incrementAndGet()
+        }
+    }
+}
+
 fun Route.multiplexWebSocket(path: String = "") {
     webSocket(path = path) {
+        val header = call.parameters.get("X-Device-Info")
+        handleSocketOpened(header)
         val user = call.principal<Principal>()
         val myOpenSockets = ConcurrentHashMap<String, OpenChannel>()
         try {
@@ -33,13 +166,18 @@ fun Route.multiplexWebSocket(path: String = "") {
                 if (message is Frame.Close) break@incomingLoop
                 if (message !is Frame.Text) continue
                 val text = message.readText()
+
+                handleIncomingCount(header, text)
+
                 if (text == "") {
+                    handleOutgoingCount(header, "")
                     send("")
                     continue
                 }
                 val decoded: MultiplexMessage = Serialization.json.decodeFromString(text)
                 when {
                     decoded.start -> {
+                        ServerRequestCounter.socketChannelsOpened.incrementAndGet()
                         @Suppress("UNCHECKED_CAST") val apiWebsocket =
                             ApiWebsocket.known.find { it.route.fullPath == decoded.path } as? ApiWebsocket<Any?, Any?, Any?>
                                 ?: continue@incomingLoop
@@ -57,14 +195,14 @@ fun Route.multiplexWebSocket(path: String = "") {
                                 apiWebsocket.implementation(
                                     ApiWebsocket.Session(
                                         send = {
-                                            send(
-                                                Serialization.json.encodeToString(
-                                                    MultiplexMessage(
-                                                        channel = decoded.channel,
-                                                        data = Serialization.json.encodeToString(outSerializer, it)
-                                                    )
+                                            val message = Serialization.json.encodeToString(
+                                                MultiplexMessage(
+                                                    channel = decoded.channel,
+                                                    data = Serialization.json.encodeToString(outSerializer, it)
                                                 )
                                             )
+                                            handleOutgoingCount(header, message)
+                                            send(message)
                                         },
                                         incoming = incomingChannel.consumeAsFlow().map {
                                             Serialization.json.decodeFromString(inSerializer, it)
@@ -74,23 +212,29 @@ fun Route.multiplexWebSocket(path: String = "") {
                                 )
                             }
                         )
-                        send(
-                            Serialization.json.encodeToString(
-                                MultiplexMessage(
-                                    channel = decoded.channel,
-                                    path = decoded.path,
-                                    start = true
-                                )
+
+                        val message = Serialization.json.encodeToString(
+                            MultiplexMessage(
+                                channel = decoded.channel,
+                                path = decoded.path,
+                                start = true
                             )
                         )
+                        handleOutgoingCount(header, message)
+                        send(message)
                     }
+
                     decoded.end -> {
+                        ServerRequestCounter.socketChannelsClosed.incrementAndGet()
                         val open = myOpenSockets.remove(decoded.channel) ?: continue
                         open.job.cancel()
                     }
+
                     decoded.data != null -> {
                         val open = myOpenSockets[decoded.channel] ?: continue
-                        open.channel.send(decoded.data!!)
+                        val message = decoded.data!!
+                        handleOutgoingCount(header, message)
+                        open.channel.send(message)
                     }
                 }
             }
@@ -100,6 +244,7 @@ fun Route.multiplexWebSocket(path: String = "") {
                 value.channel.close()
             }
             this.close()
+            handleSocketClosed(header)
         }
     }
 }

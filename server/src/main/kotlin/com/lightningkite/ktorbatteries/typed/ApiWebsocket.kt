@@ -21,8 +21,8 @@ data class ApiWebsocket<USER, INPUT, OUTPUT>(
     val inputType: KType,
     val outputType: KType,
     override val userType: KType? = null,
-    val implementation: suspend Session<INPUT, OUTPUT>.(user: USER)->Unit
-): Documentable {
+    val implementation: suspend Session<INPUT, OUTPUT>.(user: USER) -> Unit
+) : Documentable {
     class Session<INPUT, OUTPUT>(
         val send: suspend (OUTPUT) -> Unit,
         val incoming: Flow<INPUT>
@@ -53,15 +53,15 @@ inline fun <reified USER, reified INPUT, reified OUTPUT> Route.apiWebsocket(
     val userType = typeOf<USER>().takeUnless { it.classifier == Unit::class }
     ApiWebsocket.known.add(
         ApiWebsocket<USER, INPUT, OUTPUT>(
-        route = this,
-        summary = summary,
-        description = description,
-        errorCases = errorCases,
-        inputType = inputType,
-        outputType = outputType,
-        userType = userType,
-        implementation = implementation
-    )
+            route = this,
+            summary = summary,
+            description = description,
+            errorCases = errorCases,
+            inputType = inputType,
+            outputType = outputType,
+            userType = userType,
+            implementation = implementation
+        )
     )
     webSocket(path = path) {
         implementation(
