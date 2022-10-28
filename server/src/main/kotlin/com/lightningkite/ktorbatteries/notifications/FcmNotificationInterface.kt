@@ -40,7 +40,7 @@ object FcmNotificationInterface : NotificationInterface {
                                     CriticalSound.builder()
                                         .setCritical(true)
                                         .setName(ios.sound)
-                                        .setVolume(1.0)
+                                        .setVolume(0.5)
                                         .build()
                                 )
                             else {

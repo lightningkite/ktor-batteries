@@ -27,7 +27,7 @@ dependencies {
 
     ksp(project(":processor"))
     kspTest(project(":processor"))
-    testImplementation("org.jetbrains.kotlin:kotlin-test:$kotlinVersion")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
 }
 
 ksp {
@@ -72,4 +72,4 @@ standardPublishing {
         )
     }
 }
-tasks.getByName("equivalentsJarMain").published = true
+tasks.getByName("equivalentsJar").published = true
