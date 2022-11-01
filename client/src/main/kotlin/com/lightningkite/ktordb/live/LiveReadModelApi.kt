@@ -20,7 +20,8 @@ class LiveReadModelApi<Model : HasId<UUID>>(
     val url: String,
     token: String,
     headers: Map<String, String> = mapOf(),
-    val serializer: KSerializer<Model>
+    val serializer: KSerializer<Model>,
+    val querySerializer: KSerializer<Query<Model>>,
 ) : ReadModelApi<Model>() {
 
 
@@ -31,7 +32,7 @@ class LiveReadModelApi<Model : HasId<UUID>>(
             token: String,
             headers: Map<String, String> = mapOf(),
         ): LiveReadModelApi<Model> =
-            LiveReadModelApi("$root$path", token, headers, defaultJsonMapper.serializersModule.serializer())
+            LiveReadModelApi("$root$path", token, headers, defaultJsonMapper.serializersModule.serializer(), defaultJsonMapper.serializersModule.serializer())
     }
 
     private val authHeaders = headers + mapOf("Authorization" to "Bearer $token")
@@ -40,7 +41,7 @@ class LiveReadModelApi<Model : HasId<UUID>>(
         url = "$url/query",
         method = HttpClient.POST,
         headers = authHeaders,
-        body = query.toJsonRequestBody(),
+        body = query.toJsonRequestBody(querySerializer),
     ).readJson(ListSerializer(serializer))
 
 
