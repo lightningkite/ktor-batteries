@@ -13,9 +13,14 @@ import { map, mergeMap } from 'rxjs/operators'
 
 //! Declares com.lightningkite.ktordb.live.LiveWriteModelApi
 export class LiveWriteModelApi<Model extends HasId<string>> extends WriteModelApi<Model> {
-    public constructor(public readonly url: string, token: string, headers: Map<string, string>, public readonly serializer: ReifiedType) {
+    public constructor(public readonly url: string, token: (string | null), headers: Map<string, string>, public readonly serializer: ReifiedType) {
         super();
-        this.authHeaders = new Map([...headers, ...new Map([["Authorization", `Bearer ${token}`]])]);
+        this.authHeaders = ((): (Map<string, string> | null) => {
+            if (token === null || token === undefined) {
+                return null
+            }
+            return ((it: string): Map<string, string> => (new Map([...headers, ...new Map([["Authorization", `Bearer ${it}`]])])))(token)
+        })() ?? headers;
     }
     
     
@@ -48,7 +53,9 @@ export class LiveWriteModelApi<Model extends HasId<string>> extends WriteModelAp
     }
     
     public patchBulk(modification: MassModification<Model>): Observable<number> {
-        return HttpClient.INSTANCE.call(`${this.url}/bulk`, HttpClient.INSTANCE.PATCH, this.authHeaders, HttpBody.json(modification), undefined).pipe(mergeMap((it: Response): Observable<string> => (from(it.text())))).pipe(map((it: string): number => (parseInt(it))));
+        return HttpClient.INSTANCE.call(`${this.url}/bulk`, HttpClient.INSTANCE.PATCH, this.authHeaders, HttpBody.json(modification), undefined)
+            .pipe(mergeMap((it: Response): Observable<string> => (from(it.text()))))
+            .pipe(map((it: string): number => (parseInt(it))));
     }
     
     public _delete(id: UUIDFor<Model>): Observable<void> {
@@ -65,8 +72,8 @@ export namespace LiveWriteModelApi {
         private constructor() {
         }
         public static INSTANCE = new Companion();
-        
-        public create<Model extends HasId<string>>(Model: Array<any>, root: string, path: string, token: string, headers: Map<string, string> = new Map([])): LiveWriteModelApi<Model> {
+
+        public create<Model extends HasId<string>>(Model: Array<any>, root: string, path: string, token: (string | null), headers: Map<string, string> = new Map([])): LiveWriteModelApi<Model> {
             return new LiveWriteModelApi<Model>(`${root}${path}`, token, headers, Model);
         }
     }

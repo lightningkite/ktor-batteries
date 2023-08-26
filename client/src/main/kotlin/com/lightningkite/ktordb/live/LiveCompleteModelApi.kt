@@ -19,7 +19,7 @@ class LiveCompleteModelApi<Model : HasId<UUID>>(
             root: String,
             multiplexSocketUrl: String,
             path: String,
-            token: String,
+            token: String?,
             headers: Map<String, String> = mapOf(),
         ): LiveCompleteModelApi<Model> = LiveCompleteModelApi(
             read = LiveReadModelApi.create(root, path, token, headers),

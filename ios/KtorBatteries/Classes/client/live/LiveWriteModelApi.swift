@@ -8,10 +8,12 @@ import Foundation
 public final class LiveWriteModelApi<Model : HasId> : WriteModelApi<Model> {
     public var url: String
     public var serializer: Model.Type
-    public init(url: String, token: String, headers: Dictionary<String, String>, serializer: Model.Type) {
+    public init(url: String, token: String?, headers: Dictionary<String, String>, serializer: Model.Type) {
         self.url = url
         self.serializer = serializer
-        self.authHeaders = headers.plus(dictionaryOf(Pair("Authorization", "Bearer \(String(kotlin: token))")))
+        self.authHeaders = (token).map { (it) in
+            return headers.plus(dictionaryOf(Pair("Authorization", "Bearer \(String(kotlin: it))")))
+        } ?? headers
         super.init()
         //Necessary properties should be initialized now
     }
@@ -65,7 +67,7 @@ public final class LiveWriteModelApiCompanion {
     }
     public static let INSTANCE = LiveWriteModelApiCompanion()
     
-    public func create<Model : HasId>(root: String, path: String, token: String, headers: Dictionary<String, String> = dictionaryOf()) -> LiveWriteModelApi<Model> {
+    public func create<Model : HasId>(root: String, path: String, token: String?, headers: Dictionary<String, String> = dictionaryOf()) -> LiveWriteModelApi<Model> {
         return LiveWriteModelApi<Model>(url: "\(String(kotlin: root))\(String(kotlin: path))", token: token, headers: headers, serializer: Model.self);
     }
 }
