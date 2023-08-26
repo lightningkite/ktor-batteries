@@ -8,10 +8,14 @@ import Foundation
 public final class LiveReadModelApi<Model : HasId> : ReadModelApi<Model> {
     public var url: String
     public var serializer: Model.Type
-    public init(url: String, token: String, headers: Dictionary<String, String> = dictionaryOf(), serializer: Model.Type) {
+    public var querySerializer: Query<Model>.Type
+    public init(url: String, token: String?, headers: Dictionary<String, String> = dictionaryOf(), serializer: Model.Type, querySerializer: Query<Model>.Type) {
         self.url = url
         self.serializer = serializer
-        self.authHeaders = headers.plus(dictionaryOf(Pair("Authorization", "Bearer \(String(kotlin: token))")))
+        self.querySerializer = querySerializer
+        self.authHeaders = (token).map { (it) in
+            return headers.plus(dictionaryOf(Pair("Authorization", "Bearer \(String(kotlin: it))")))
+        } ?? headers
         super.init()
         //Necessary properties should be initialized now
     }
@@ -40,7 +44,7 @@ public final class LiveReadModelApiCompanion {
     }
     public static let INSTANCE = LiveReadModelApiCompanion()
     
-    public func create<Model : HasId>(root: String, path: String, token: String, headers: Dictionary<String, String> = dictionaryOf()) -> LiveReadModelApi<Model> {
-        return LiveReadModelApi<Model>(url: "\(String(kotlin: root))\(String(kotlin: path))", token: token, headers: headers, serializer: Model.self);
+    public func create<Model : HasId>(root: String, path: String, token: String?, headers: Dictionary<String, String> = dictionaryOf()) -> LiveReadModelApi<Model> {
+        return LiveReadModelApi<Model>(url: "\(String(kotlin: root))\(String(kotlin: path))", token: token, headers: headers, serializer: Model.self, querySerializer: Query<Model>.self);
     }
 }

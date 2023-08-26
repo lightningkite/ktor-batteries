@@ -27,7 +27,7 @@ public final class LiveCompleteModelApiCompanion {
     }
     public static let INSTANCE = LiveCompleteModelApiCompanion()
     
-    public func create<Model : HasId>(root: String, multiplexSocketUrl: String, path: String, token: String, headers: Dictionary<String, String> = dictionaryOf()) -> LiveCompleteModelApi<Model> {
+    public func create<Model : HasId>(root: String, multiplexSocketUrl: String, path: String, token: String?, headers: Dictionary<String, String> = dictionaryOf()) -> LiveCompleteModelApi<Model> {
         return LiveCompleteModelApi<Model>(read: LiveReadModelApiCompanion.INSTANCE.create(root: root, path: path, token: token, headers: headers), write: LiveWriteModelApiCompanion.INSTANCE.create(root: root, path: path, token: token, headers: headers), observe: LiveObserveModelApiCompanion.INSTANCE.create(multiplexUrl: multiplexSocketUrl, token: token, headers: headers, path: path));
     }
 }

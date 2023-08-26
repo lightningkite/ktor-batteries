@@ -8,7 +8,7 @@ import { xListComparatorGet } from '../db/SortPart'
 import { WebSocketIsh, multiplexedSocketReified } from './sockets'
 import { Comparable, Comparator, EqualOverrideMap, compareBy, listRemoveAll, runOrNull, safeEq, xMutableMapGetOrPut } from '@lightningkite/khrysalis-runtime'
 import { NEVER, Observable } from 'rxjs'
-import { catchError, finalize, map, publishReplay, refCount, switchMap } from 'rxjs/operators'
+import {catchError, map, publishReplay, refCount, switchMap, tap} from 'rxjs/operators'
 
 //! Declares com.lightningkite.ktordb.live.LiveObserveModelApi
 export class LiveObserveModelApi<Model extends HasId<string>> extends ObserveModelApi<Model> {
@@ -24,9 +24,14 @@ export class LiveObserveModelApi<Model extends HasId<string>> extends ObserveMod
     
     public observe(query: Query<Model>): Observable<Array<Model>> {
         //multiplexedSocket<ListChange<Model>, Query<Model>>("$multiplexUrl?jwt=$token", path)
-        return xMutableMapGetOrPut<Query<Model>, Observable<Array<Model>>>(this.alreadyOpen, query, (): Observable<Array<Model>> => (this.openSocket(query).pipe(finalize((): void => {
-            this.alreadyOpen.delete(query);
-        })).pipe(publishReplay(1)).pipe(refCount())));
+        return xMutableMapGetOrPut<Query<Model>, Observable<Array<Model>>>(this.alreadyOpen, query, (): Observable<Array<Model>> => (this.openSocket(query)
+            .pipe(tap({
+                unsubscribe: (): void => {
+                    this.alreadyOpen.delete(query);
+                }
+            }))
+            .pipe(publishReplay(1))
+            .pipe(refCount())));
     }
 }
 export namespace LiveObserveModelApi {
@@ -35,11 +40,18 @@ export namespace LiveObserveModelApi {
         private constructor() {
         }
         public static INSTANCE = new Companion();
-        
-        public create<Model extends HasId<string>>(Model: Array<any>, multiplexUrl: string, token: string, headers: Map<string, string>, path: string): LiveObserveModelApi<Model> {
-            return new LiveObserveModelApi<Model>((query: Query<Model>): Observable<Array<Model>> => (xObservableToListObservable<Model>(multiplexedSocketReified<ListChange<Model>, Query<Model>>([ListChange, Model], [Query, Model], `${multiplexUrl}?jwt=${token}`, path, undefined).pipe(switchMap((it: WebSocketIsh<ListChange<Model>, Query<Model>>): Observable<ListChange<Model>> => {
-                it.send(query);
-                return it.messages.pipe(catchError((it: any): Observable<ListChange<Model>> => (NEVER)));
+
+        public create<Model extends HasId<string>>(Model: Array<any>, multiplexUrl: string, token: (string | null), headers: Map<string, string>, path: string): LiveObserveModelApi<Model> {
+            return new LiveObserveModelApi<Model>((query: Query<Model>): Observable<Array<Model>> => (xObservableToListObservable<Model>(multiplexedSocketReified<ListChange<Model>, Query<Model>>([ListChange, Model], [Query, Model], ((): string => {
+                if (token !== null) {
+                    return `${multiplexUrl}?jwt=${token}`
+                } else {
+                    return multiplexUrl
+                }
+            })(), path, undefined)
+                .pipe(switchMap((it: WebSocketIsh<ListChange<Model>, Query<Model>>): Observable<ListChange<Model>> => {
+                    it.send(query);
+                    return it.messages.pipe(catchError((it: any): Observable<ListChange<Model>> => (NEVER)));
             })), xListComparatorGet(query.orderBy) ?? compareBy<Model>((it: Model): (Comparable<(any | null)> | null) => (it._id)))));
         }
     }

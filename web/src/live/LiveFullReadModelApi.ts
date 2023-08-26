@@ -20,8 +20,8 @@ export namespace LiveFullReadModelApi {
         private constructor() {
         }
         public static INSTANCE = new Companion();
-        
-        public create<Model extends HasId<string>>(Model: Array<any>, root: string, multiplexSocketUrl: string, path: string, token: string, headers: Map<string, string> = new Map([])): LiveFullReadModelApi<Model> {
+
+        public create<Model extends HasId<string>>(Model: Array<any>, root: string, multiplexSocketUrl: string, path: string, token: (string | null), headers: Map<string, string> = new Map([])): LiveFullReadModelApi<Model> {
             return new LiveFullReadModelApi<Model>(LiveReadModelApi.Companion.INSTANCE.create<Model>(Model, root, path, token, headers), LiveObserveModelApi.Companion.INSTANCE.create<Model>(Model, multiplexSocketUrl, token, headers, path));
         }
     }

@@ -15,7 +15,7 @@ import java.util.*
 
 class LiveWriteModelApi<Model : HasId<UUID>>(
     val url: String,
-    token: String,
+    token: String?,
     headers: Map<String, String>,
     val serializer: KSerializer<Model>
 ) : WriteModelApi<Model>() {
@@ -24,13 +24,13 @@ class LiveWriteModelApi<Model : HasId<UUID>>(
         inline fun <reified Model : HasId<UUID>> create(
             root: String,
             path: String,
-            token: String,
+            token: String?,
             headers: Map<String, String> = mapOf(),
         ): LiveWriteModelApi<Model> =
             LiveWriteModelApi("$root$path", token, headers, defaultJsonMapper.serializersModule.serializer())
     }
 
-    private val authHeaders = headers + mapOf("Authorization" to "Bearer $token")
+    private val authHeaders = token?.let { headers + mapOf("Authorization" to "Bearer $it") } ?: headers
 
     override fun post(value: Model): Single<Model> = HttpClient.call(
         url = url,

@@ -16,13 +16,13 @@ class LiveObserveModelApi<Model : HasId<UUID>>(
     companion object {
         inline fun <reified Model : HasId<UUID>> create(
             multiplexUrl: String,
-            token: String,
+            token: String?,
             headers: Map<String, String>,
             path: String
         ): LiveObserveModelApi<Model> = LiveObserveModelApi(
             openSocket = { query ->
                 multiplexedSocket<ListChange<Model>, Query<Model>>(
-                    "$multiplexUrl?jwt=$token",
+                    if (token != null) "$multiplexUrl?jwt=$token" else multiplexUrl,
                     path
                 )
                     .switchMap {

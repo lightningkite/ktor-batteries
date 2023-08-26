@@ -18,7 +18,7 @@ import java.util.*
 
 class LiveReadModelApi<Model : HasId<UUID>>(
     val url: String,
-    token: String,
+    token: String?,
     headers: Map<String, String> = mapOf(),
     val serializer: KSerializer<Model>,
     val querySerializer: KSerializer<Query<Model>>,
@@ -29,13 +29,13 @@ class LiveReadModelApi<Model : HasId<UUID>>(
         inline fun <reified Model : HasId<UUID>> create(
             root: String,
             path: String,
-            token: String,
+            token: String?,
             headers: Map<String, String> = mapOf(),
         ): LiveReadModelApi<Model> =
             LiveReadModelApi("$root$path", token, headers, defaultJsonMapper.serializersModule.serializer(), defaultJsonMapper.serializersModule.serializer())
     }
 
-    private val authHeaders = headers + mapOf("Authorization" to "Bearer $token")
+    private val authHeaders = token?.let { headers + mapOf("Authorization" to "Bearer $it") } ?: headers
 
     override fun list(query: Query<Model>): Single<List<Model>> = HttpClient.call(
         url = "$url/query",

@@ -10,9 +10,14 @@ import { Observable } from 'rxjs'
 
 //! Declares com.lightningkite.ktordb.live.LiveReadModelApi
 export class LiveReadModelApi<Model extends HasId<string>> extends ReadModelApi<Model> {
-    public constructor(public readonly url: string, token: string, headers: Map<string, string> = new Map([]), public readonly serializer: ReifiedType) {
+    public constructor(public readonly url: string, token: (string | null), headers: Map<string, string> = new Map([]), public readonly serializer: ReifiedType, public readonly querySerializer: ReifiedType) {
         super();
-        this.authHeaders = new Map([...headers, ...new Map([["Authorization", `Bearer ${token}`]])]);
+        this.authHeaders = ((): (Map<string, string> | null) => {
+            if (token === null || token === undefined) {
+                return null
+            }
+            return ((it: string): Map<string, string> => (new Map([...headers, ...new Map([["Authorization", `Bearer ${it}`]])])))(token)
+        })() ?? headers;
     }
     
     
@@ -37,9 +42,9 @@ export namespace LiveReadModelApi {
         private constructor() {
         }
         public static INSTANCE = new Companion();
-        
-        public create<Model extends HasId<string>>(Model: Array<any>, root: string, path: string, token: string, headers: Map<string, string> = new Map([])): LiveReadModelApi<Model> {
-            return new LiveReadModelApi<Model>(`${root}${path}`, token, headers, Model);
+
+        public create<Model extends HasId<string>>(Model: Array<any>, root: string, path: string, token: (string | null), headers: Map<string, string> = new Map([])): LiveReadModelApi<Model> {
+            return new LiveReadModelApi<Model>(`${root}${path}`, token, headers, Model, [Query, Model]);
         }
     }
 }

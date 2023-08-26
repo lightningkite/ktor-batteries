@@ -24,7 +24,7 @@ public final class LiveFullReadModelApiCompanion {
     }
     public static let INSTANCE = LiveFullReadModelApiCompanion()
     
-    public func create<Model : HasId>(root: String, multiplexSocketUrl: String, path: String, token: String, headers: Dictionary<String, String> = dictionaryOf()) -> LiveFullReadModelApi<Model> {
+    public func create<Model : HasId>(root: String, multiplexSocketUrl: String, path: String, token: String?, headers: Dictionary<String, String> = dictionaryOf()) -> LiveFullReadModelApi<Model> {
         return LiveFullReadModelApi<Model>(read: LiveReadModelApiCompanion.INSTANCE.create(root: root, path: path, token: token, headers: headers), observe: LiveObserveModelApiCompanion.INSTANCE.create(multiplexUrl: multiplexSocketUrl, token: token, headers: headers, path: path));
     }
 }

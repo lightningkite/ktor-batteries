@@ -6,7 +6,7 @@ buildscript {
     repositories {
         mavenLocal()
         mavenCentral()
-//        maven(url = "https://s01.oss.sonatype.org/content/repositories/snapshots/")
+        maven(url = "https://s01.oss.sonatype.org/content/repositories/snapshots/")
         maven(url = "https://s01.oss.sonatype.org/content/repositories/releases/")
         google()
     }
@@ -23,7 +23,7 @@ allprojects {
         mavenLocal()
         mavenCentral()
         maven(url = "https://s01.oss.sonatype.org/content/repositories/releases/")
-//        maven(url = "https://s01.oss.sonatype.org/content/repositories/snapshots/")
+        maven(url = "https://s01.oss.sonatype.org/content/repositories/snapshots/")
     }
 }
 tasks.create("clean", Delete::class.java) {
