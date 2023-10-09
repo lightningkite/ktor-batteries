@@ -2,12 +2,15 @@
 package com.lightningkite.ktordb.live
 
 import com.lightningkite.khrysalis.SharedCode
+import com.lightningkite.khrysalis.SwiftReturnType
 import com.lightningkite.ktordb.*
 import com.lightningkite.ktordb.HasId
 import com.lightningkite.ktordb.ListChange
 import com.lightningkite.ktordb.Query
+import com.lightningkite.rx.okhttp.HttpClient
 import io.reactivex.rxjava3.core.Observable
 import java.util.*
+import java.util.concurrent.TimeUnit
 
 class LiveObserveModelApi<Model : HasId<UUID>>(
     val openSocket: (query: Query<Model>) -> Observable<List<Model>>
@@ -25,11 +28,7 @@ class LiveObserveModelApi<Model : HasId<UUID>>(
                     if (token != null) "$multiplexUrl?jwt=$token" else multiplexUrl,
                     path
                 )
-                    .switchMap {
-                        it.send(query)
-                        it.messages.onErrorResumeNext { Observable.never() }
-                    }
-                    .toListObservable(query.orderBy.comparator ?: compareBy { it._id })
+                    .filter(query)
             }
         )
     }
@@ -60,3 +59,10 @@ fun <T : HasId<UUID>> Observable<ListChange<T>>.toListObservable(ordering: Compa
         localList
     }
 }
+
+fun <T : HasId<UUID>> Observable<WebSocketIsh<ListChange<T>, Query<T>>>.filter(query: Query<T>): Observable<List<T>> =
+    this
+        .doOnNext { it.send(query) }
+        .switchMap { it.messages }
+        .retryWhen @SwiftReturnType("Observable<Error>") { it.delay(5000L, TimeUnit.MILLISECONDS, HttpClient.responseScheduler!!) }
+        .toListObservable(query.orderBy.comparator ?: compareBy { it._id })
