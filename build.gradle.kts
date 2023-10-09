@@ -4,10 +4,10 @@ buildscript {
     val kotlinVersion:String by extra
     val khrysalisVersion: String by extra
     repositories {
-//        mavenLocal()
-        mavenCentral()
-        maven(url = "https://s01.oss.sonatype.org/content/repositories/snapshots/")
+        mavenLocal()
+//        maven(url = "https://s01.oss.sonatype.org/content/repositories/snapshots/")
         maven(url = "https://s01.oss.sonatype.org/content/repositories/releases/")
+        mavenCentral()
         google()
     }
     dependencies {
@@ -20,10 +20,10 @@ buildscript {
 allprojects {
     group = "com.lightningkite.ktorbatteries"
     repositories {
-//        mavenLocal()
-        mavenCentral()
+        mavenLocal()
+//        maven(url = "https://s01.oss.sonatype.org/content/repositories/snapshots/")
         maven(url = "https://s01.oss.sonatype.org/content/repositories/releases/")
-        maven(url = "https://s01.oss.sonatype.org/content/repositories/snapshots/")
+        mavenCentral()
     }
 }
 tasks.create("clean", Delete::class.java) {

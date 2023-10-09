@@ -12,7 +12,7 @@ export class SortPart<T extends any> {
     equals: (other: any) => boolean;
     hashCode: () => number;
     
-    public static constructorKProperty1comSortPartTAnyBoolean<T extends any>(field: TProperty1<T, any>, ascending: boolean = true) {
+    public static constructorKProperty1comSortPartTAnyBoolean<T extends any>(field: (keyof T & string), ascending: boolean = true) {
         let result = new SortPart<T>(field, ascending);
         
         return result;
