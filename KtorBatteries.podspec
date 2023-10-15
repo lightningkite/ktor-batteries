@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'KtorBatteries'
-  s.version          = '0.1.1'
+  s.version          = '0.2.4'
   s.summary          = 'KtorBatteries'
 
   s.description      = <<-DESC
