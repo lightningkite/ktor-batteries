@@ -20,6 +20,7 @@ com.lightningkite.ktordb.SignalData
 com.lightningkite.ktordb.sizesEquals>com.lightningkite.ktordb.PropChaincom.lightningkite.ktordb.sizesEquals.K, kotlin.collections.Listcom.lightningkite.ktordb.sizesEquals.T
 com.lightningkite.ktordb.plus>com.lightningkite.ktordb.PropChaincom.lightningkite.ktordb.plus.K, com.lightningkite.ktordb.plus.T
 com.lightningkite.ktordb.WriteModelApi
+com.lightningkite.ktordb.live.filter>io.reactivex.rxjava3.core.Observablecom.lightningkite.ktordb.live.WebSocketIshcom.lightningkite.ktordb.ListChangecom.lightningkite.ktordb.live.filter.T, com.lightningkite.ktordb.Querycom.lightningkite.ktordb.live.filter.T
 com.lightningkite.ktordb.Aggregate
 com.lightningkite.ktordb.plus>com.lightningkite.ktordb.PropChaincom.lightningkite.ktordb.plus.K, kotlin.collections.Mapkotlin.String, com.lightningkite.ktordb.plus.T
 com.lightningkite.ktordb.GroupAggregateQuery

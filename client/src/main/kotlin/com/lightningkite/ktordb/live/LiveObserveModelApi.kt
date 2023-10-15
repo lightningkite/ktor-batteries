@@ -1,12 +1,10 @@
 @file:SharedCode
+
 package com.lightningkite.ktordb.live
 
 import com.lightningkite.khrysalis.SharedCode
 import com.lightningkite.khrysalis.SwiftReturnType
 import com.lightningkite.ktordb.*
-import com.lightningkite.ktordb.HasId
-import com.lightningkite.ktordb.ListChange
-import com.lightningkite.ktordb.Query
 import com.lightningkite.rx.okhttp.HttpClient
 import io.reactivex.rxjava3.core.Observable
 import java.util.*
@@ -56,7 +54,7 @@ fun <T : HasId<UUID>> Observable<ListChange<T>>.toListObservable(ordering: Compa
             if (index == -1) index = localList.size
             localList.add(index, it)
         } ?: it.old?.let { localList.removeAll { o -> it._id == o._id } }
-        localList
+        localList.toList()
     }
 }
 
@@ -64,5 +62,11 @@ fun <T : HasId<UUID>> Observable<WebSocketIsh<ListChange<T>, Query<T>>>.filter(q
     this
         .doOnNext { it.send(query) }
         .switchMap { it.messages }
-        .retryWhen @SwiftReturnType("Observable<Error>") { it.delay(5000L, TimeUnit.MILLISECONDS, HttpClient.responseScheduler!!) }
+        .retryWhen @SwiftReturnType("Observable<Error>") {
+            it.delay(
+                5000L,
+                TimeUnit.MILLISECONDS,
+                HttpClient.responseScheduler!!
+            )
+        }
         .toListObservable(query.orderBy.comparator ?: compareBy { it._id })

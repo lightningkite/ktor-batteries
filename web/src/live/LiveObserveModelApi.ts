@@ -67,7 +67,7 @@ export function xObservableToListObservable<T extends HasId<string>>(this_: Obse
                 listRemoveAll(localList, (o: T): boolean => (safeEq(it_16._id, o._id)));
             }
         }
-        return localList;
+        return Array.from(localList);
     }));
 }
 
