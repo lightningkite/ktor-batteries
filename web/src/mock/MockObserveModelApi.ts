@@ -4,7 +4,7 @@ import { ObserveModelApi } from '../ObserveModelApi'
 import { HasId } from '../db/HasId'
 import { Query } from '../db/Query'
 import { MockTable } from './MockTable'
-import {Observable, startWith} from 'rxjs'
+import { Observable, startWith } from 'rxjs'
 
 //! Declares com.lightningkite.ktordb.mock.MockObserveModelApi
 export class MockObserveModelApi<Model extends HasId<string>> extends ObserveModelApi<Model> {

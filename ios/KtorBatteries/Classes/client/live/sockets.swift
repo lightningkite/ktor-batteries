@@ -5,11 +5,11 @@ import RxSwift
 import RxSwiftPlus
 import Foundation
 
-public var sharedSocketShouldBeActive: Observable<Bool> = Observable.just(false)
-
-public var _overrideWebSocketProvider: ((String) -> Observable<WebSocketInterface>)? = nil
+public var sharedSocketShouldBeActive: Observable<Bool> = Observable.just(true)
 private var retryTime = 1000
 private var lastRetry = 0
+
+public var _overrideWebSocketProvider: ((String) -> Observable<WebSocketInterface>)? = nil
 private var sharedSocketCache = Dictionary<String, Observable<WebSocketInterface>>()
 public func sharedSocket(url: String) -> Observable<WebSocketInterface> {
     return sharedSocketCache.getOrPut(key: url) { () -> Observable<WebSocketInterface> in sharedSocketShouldBeActive
@@ -22,22 +22,17 @@ public func sharedSocket(url: String) -> Observable<WebSocketInterface> {
                     return (_overrideWebSocketProvider?(url) ?? HttpClient.INSTANCE.webSocket(url: url))
                         .switchMap { (it) -> Observable<WebSocketInterface> in
                         lastRetry = Int(Date().timeIntervalSince1970 * 1000.0)
-//                     print("Connection to \(String(kotlin: shortUrl)) established, starting pings")
+                        //                            println("Connection to $shortUrl established, starting pings")
                         // Only have this observable until it fails
                         
-                        let pingMessages: Observable<WebSocketInterface> = Observable<Int>.interval(RxTimeInterval.milliseconds(Int(5000)), scheduler: HttpClient.INSTANCE.responseScheduler!)
-                            .map { (_) -> Void in
-//                              print("Sending ping to \(String(kotlin: url))")
-                                it.write.onNext(WebSocketFrame(text: ""))
-                             }.switchMap { (it) -> Observable<WebSocketInterface> in Observable.never() }
+                        let pingMessages: Observable<WebSocketInterface> = Observable<Int>.interval(RxTimeInterval.milliseconds(Int(30000)), scheduler: HttpClient.INSTANCE.responseScheduler!)
+                            .map { (_) -> Void in it.write.onNext(WebSocketFrame(text: " ")) }.switchMap { (it) -> Observable<WebSocketInterface> in Observable.never() }
                         
                         let timeoutAfterSeconds: Observable<WebSocketInterface> = it.read
-                            .doOnNext { (it) -> Void in
-//                         print("Got message from \(String(kotlin: shortUrl)): \(it)")
-                            if Int(Date().timeIntervalSince1970 * 1000.0) > lastRetry + 60000 {
+                            .doOnNext { (it) -> Void in if Int(Date().timeIntervalSince1970 * 1000.0) > lastRetry + 60000 {
                             retryTime = 1000
                         } }
-                            .timeout(.milliseconds(10000), scheduler: MainScheduler.instance)
+                            .timeout(.milliseconds(40000), scheduler: MainScheduler.instance)
                             .switchMap { (it) -> Observable<WebSocketInterface> in Observable.never() }
                         
                         return Observable.merge(Observable.just(it), pingMessages, timeoutAfterSeconds)
@@ -75,29 +70,110 @@ public final class WebSocketIsh<IN : Codable & Hashable, OUT : Codable & Hashabl
     }
 }
 
-public func multiplexedSocket<IN : Codable & Hashable, OUT : Codable & Hashable>(url: String, path: String, onSetup: @escaping (WebSocketIsh<IN, OUT>) -> Void = { (it) -> Void in  }) -> Observable<WebSocketIsh<IN, OUT>> {
-    return multiplexedSocket(url: url, path: path, inType: IN.self, outType: OUT.self, onSetup: onSetup);
+public func multiplexedSocket<IN : Codable & Hashable, OUT : Codable & Hashable>(url: String, path: String) -> Observable<WebSocketIsh<IN, OUT>> {
+    return multiplexedSocket(url: url, path: path, inType: IN.self, outType: OUT.self);
 }
 
-public func multiplexedSocket<IN : Codable & Hashable, OUT : Codable & Hashable>(url: String, path: String, inType: IN.Type, outType: OUT.Type, onSetup: @escaping (WebSocketIsh<IN, OUT>) -> Void = { (it) -> Void in  }) -> Observable<WebSocketIsh<IN, OUT>> {
+public func multiplexedSocket<IN : Codable & Hashable, OUT : Codable & Hashable>(url: String, path: String, inType: IN.Type, outType: OUT.Type) -> Observable<WebSocketIsh<IN, OUT>> {
     let shortUrl = url.substringBefore(delimiter: "?")
     let channel = String(kotlin: UUID.randomUUID())
-    var lastSocket: WebSocketInterface? = nil
+    
+    
     return sharedSocket(url: url)
-        .map { (it) -> WebSocketIsh<IN, OUT> in
-        //            print("Setting up channel on socket to \(shortUrl) with \(path)")
-        lastSocket = it
-        it.write.onNext(WebSocketFrame(text: MultiplexMessage(channel: channel, path: path, start: true).toJsonString()))
-        let part = MultiplexedWebsocketPart(messages: it.read.compactMap({ (it) -> String? in
-            guard let text = it.text else { return nil }
-            if text == "" { return nil }
-            guard let message: MultiplexMessage = text.fromJsonString() else { return nil }
-            return message.channel == channel ? message.data : nil
-        }), send: { (message) -> Void in it.write.onNext(WebSocketFrame(text: MultiplexMessage(channel: channel, data: message).toJsonString())) })
-        let typedPart = (WebSocketIsh(messages: part.messages.compactMap({ (it) -> IN? in it.fromJsonString(serializer: IN.self) }) as Observable<IN>, send: { (m) -> Void in part.send(m.toJsonString()) } as (OUT) -> Void) as WebSocketIsh<IN, OUT>)
-        onSetup(typedPart)
-        return typedPart
-    }
-        .doOnDispose { () -> Void in lastSocket?.write.onNext(WebSocketFrame(text: MultiplexMessage(channel: channel, path: path, end: true).toJsonString())) }
+        .switchMap { sharedSocket in
+            print("Setting up channel $channel to $shortUrl with $path")
+            let multiplexedIn: Observable<MultiplexMessage> = sharedSocket.read.compactMap({ (it) -> MultiplexMessage? in
+                guard let text = it.text else { return nil }
+                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return nil }
+                guard let message: MultiplexMessage = text.fromJsonString() else {
+                    return nil
+                }
+                return message
+            })
+                .filter { (it) -> Bool in it.channel == channel }
+            
+            var current = PublishSubject<IN>()
+            return multiplexedIn
+                .compactMap { message in
+                    if message.start {
+                        print("Channel ${message.channel} established with $sharedSocket")
+                        return (WebSocketIsh(
+                            messages: current as Observable<IN>,
+                            send: { (message) -> Void in
+                                sharedSocket.write.onNext(
+                                    WebSocketFrame(
+                                        text: MultiplexMessage(
+                                            channel: channel,
+                                            data: message.toJsonString()).toJsonString()
+                                    )
+                                )
+                            } as (OUT) -> Void) as WebSocketIsh<IN, OUT>)
+                    } else if message.data != nil {
+                        print("Got ${message.data} to ${message.channel}")
+                        guard let next:IN = message.data?.fromJsonString() else {
+                            return nil
+                        }
+                        current.onNext(next)
+                        
+                        return nil
+                    } else if message.end {
+                        print("Channel ${message.channel} terminated")
+                        current = PublishSubject()
+                        sharedSocket.write.onNext(WebSocketFrame(text: MultiplexMessage(channel: channel, path: path, start: true).toJsonString()))
+                        return nil
+                    } else  {
+                        return nil
+                    }
+                    
+//                    return (WebSocketIsh(messages: current as Observable<IN>, send: { (message) -> Void in sharedSocket.write.onNext(WebSocketFrame(text: MultiplexMessage(channel: channel, data: message.toJsonString()).toJsonString())) } as (OUT) -> Void) as WebSocketIsh<IN, OUT>)
+                }
+                .doOnSubscribe { (_) -> Void in sharedSocket.write.onNext(WebSocketFrame(text: MultiplexMessage(channel: channel, path: path, start: true).toJsonString())) }
+                .doOnDispose { () -> Void in sharedSocket.write.onNext(WebSocketFrame(text: MultiplexMessage(channel: channel, path: path, end: true).toJsonString())) }
+                .retry(when:  { (it) -> Observable<Error> in
+                    let temp = retryTime
+                    retryTime = temp * 2
+                    return it.delay(.milliseconds(temp), scheduler: MainScheduler.instance)
+                })
+            
+        }
+    //
+    //    return sharedSocket(url: url)
+    //        .switchMap { (sharedSocket) -> Observable<WebSocketIsh<IN, OUT>> in
+    //            print("Setting up channel $channel to $shortUrl with $path")
+    //            let multiplexedIn = sharedSocket.read.compactMap({ (it) -> MultiplexMessage? in
+    //                guard let text = it.text else { return nil }
+    //                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return nil }
+    //                return (text.fromJsonString() as MultiplexMessage?)
+    //            })
+    //                .filter { (it) -> Bool in it.channel == channel }
+    //            var current = PublishSubject<IN>()
+    //            return multiplexedIn
+    //                .compactMap({ (message) -> WebSocketIsh<IN, OUT>? in
+    //                    if message.start {
+    //                        print("Channel ${message.channel} established with $sharedSocket")
+    //                        return (WebSocketIsh(messages: current as Observable<IN>, send: { (message) -> Void in sharedSocket.write.onNext(WebSocketFrame(text: MultiplexMessage(channel: channel, data: message.toJsonString()).toJsonString())) } as (OUT) -> Void) as WebSocketIsh<IN, OUT>)
+    //                    } else if message.data != nil {
+    //                        print("Got ${message.data} to ${message.channel}")
+    //                        if let data = message.date {
+    //                            current.onNext(data.fromJsonString(serializer: IN.self))
+    //                        }
+    //                        return nil
+    //                    } else if message.end {
+    //                        print("Channel ${message.channel} terminated")
+    //                        current = PublishSubject()
+    //                        sharedSocket.write.onNext(WebSocketFrame(text: MultiplexMessage(channel: channel, path: path, start: true).toJsonString()))
+    //                        return nil
+    //                    } else  {
+    //                        return nil
+    //                    }
+    //                })
+    //                .doOnSubscribe { (_) -> Void in sharedSocket.write.onNext(WebSocketFrame(text: MultiplexMessage(channel: channel, path: path, start: true).toJsonString())) }
+    //                .doOnDispose { () -> Void in sharedSocket.write.onNext(WebSocketFrame(text: MultiplexMessage(channel: channel, path: path, end: true).toJsonString())) }
+    //                .retry(when:  { (it) -> Observable<Error> in
+    //                    let temp = retryTime
+    //                    retryTime = temp * 2
+    //                    return it.delay(.milliseconds(temp), scheduler: MainScheduler.instance)
+    //                })
+    //        }
 }
 

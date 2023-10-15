@@ -16,9 +16,7 @@ export class LiveWriteModelApi<Model extends HasId<string>> extends WriteModelAp
     public constructor(public readonly url: string, token: (string | null), headers: Map<string, string>, public readonly serializer: ReifiedType) {
         super();
         this.authHeaders = ((): (Map<string, string> | null) => {
-            if (token === null || token === undefined) {
-                return null
-            }
+            if (token === null || token === undefined) { return null }
             return ((it: string): Map<string, string> => (new Map([...headers, ...new Map([["Authorization", `Bearer ${it}`]])])))(token)
         })() ?? headers;
     }
@@ -72,7 +70,7 @@ export namespace LiveWriteModelApi {
         private constructor() {
         }
         public static INSTANCE = new Companion();
-
+        
         public create<Model extends HasId<string>>(Model: Array<any>, root: string, path: string, token: (string | null), headers: Map<string, string> = new Map([])): LiveWriteModelApi<Model> {
             return new LiveWriteModelApi<Model>(`${root}${path}`, token, headers, Model);
         }

@@ -11,12 +11,13 @@ com.lightningkite.ktordb.live
 com.lightningkite.ktordb.live.LiveFullReadModelApi
 com.lightningkite.ktordb.live.LiveObserveModelApi
 com.lightningkite.ktordb.live.toListObservable
+com.lightningkite.ktordb.live.filter
 com.lightningkite.ktordb.live.LiveReadModelApi
 com.lightningkite.ktordb.live.LiveWriteModelApi
 com.lightningkite.ktordb.live.sharedSocketShouldBeActive
-com.lightningkite.ktordb.live._overrideWebSocketProvider
 com.lightningkite.ktordb.live.retryTime
 com.lightningkite.ktordb.live.lastRetry
+com.lightningkite.ktordb.live._overrideWebSocketProvider
 com.lightningkite.ktordb.live.sharedSocketCache
 com.lightningkite.ktordb.live.sharedSocket
 com.lightningkite.ktordb.live.MultiplexedWebsocketPart

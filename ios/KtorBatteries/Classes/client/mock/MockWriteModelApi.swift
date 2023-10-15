@@ -46,7 +46,7 @@ public final class MockWriteModelApi<Model : HasId> : WriteModelApi<Model> where
                 .asList()
                 .filter({ (it) -> Bool in modification.condition.invoke(on: it) })
             .map({ (it) -> Model in self.table.replaceItem(item: modification.modification.invoke(on: it)) }))
-            .map { (it) -> Int in Int(it.count) };
+            .map { (it) -> Int in it.count };
     }
     
     override public func delete(id: UUIDFor<Model>) -> Single<Void> {

@@ -42,9 +42,7 @@ export class MockWriteModelApi<Model extends HasId<string>> extends WriteModelAp
     public patch(id: UUIDFor<Model>, modification: Modification<Model>): Observable<Model> {
         return ((): (Observable<Model> | null) => {
             const temp7 = (this.table.data.get(id) ?? null);
-            if (temp7 === null || temp7 === undefined) {
-                return null
-            }
+            if (temp7 === null || temp7 === undefined) { return null }
             return ((item: Model): Observable<Model> => {
                 const modified = modification.invoke(item);
                 this.table.replaceItem(modified);
@@ -55,8 +53,8 @@ export class MockWriteModelApi<Model extends HasId<string>> extends WriteModelAp
     
     public patchBulk(modification: MassModification<Model>): Observable<number> {
         return of(this.table
-            .asList()
-            .filter((it: Model): boolean => (modification.condition.invoke(it)))
+                .asList()
+                .filter((it: Model): boolean => (modification.condition.invoke(it)))
             .map((it: Model): Model => (this.table.replaceItem(modification.modification.invoke(it)))))
             .pipe(map((it: Array<Model>): number => (it.length)));
     }
@@ -67,9 +65,9 @@ export class MockWriteModelApi<Model extends HasId<string>> extends WriteModelAp
     
     public deleteBulk(condition: Condition<Model>): Observable<void> {
         return of(this.table
-            .asList()
-            .filter((it: Model): boolean => (condition.invoke(it)))
-            .forEach((it: Model): void => {
+                .asList()
+                .filter((it: Model): boolean => (condition.invoke(it)))
+                .forEach((it: Model): void => {
                 this.table.deleteItem(it);
         }));
     }

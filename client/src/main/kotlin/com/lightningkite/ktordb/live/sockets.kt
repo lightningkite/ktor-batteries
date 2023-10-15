@@ -7,6 +7,7 @@ import com.lightningkite.ktordb.MultiplexMessage
 import com.lightningkite.rx.mapNotNull
 import com.lightningkite.rx.okhttp.*
 import io.reactivex.rxjava3.core.Observable
+import io.reactivex.rxjava3.subjects.PublishSubject
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.serializer
 import java.util.*
@@ -93,53 +94,64 @@ fun <IN : IsCodableAndHashableNotNull, OUT : IsCodableAndHashable> multiplexedSo
 ): Observable<WebSocketIsh<IN, OUT>> {
     val shortUrl = url.substringBefore('?')
     val channel = UUID.randomUUID().toString()
-    var lastSocket: WebSocketInterface? = null
     return sharedSocket(url)
-        .switchMapSingle {
-//            println("Setting up channel on socket to $shortUrl with $path")
-            lastSocket = it
-
-            val multiplexedIn = it.read.mapNotNull {
+        .switchMap { sharedSocket ->
+//            println("Setting up channel $channel to $shortUrl with $path")
+            val multiplexedIn = sharedSocket.read.mapNotNull {
                 val text = it.text ?: return@mapNotNull null
                 if (text.isBlank()) return@mapNotNull null
                 text.fromJsonString<MultiplexMessage>()
             }
-
+                .filter { it.channel == channel }
+            var current = PublishSubject.create<IN>()
             multiplexedIn
-                .filter { it.channel == channel && it.start }
-                .firstOrError()
-                .map { _ ->
-                    println("Connected to channel $channel")
-                    WebSocketIsh<IN, OUT>(
-                        messages = multiplexedIn.mapNotNull {
-                            if (it.channel == channel)
-                                if (it.end) {
-                                    println("Socket Closed by Server")
-                                    throw Exception("Channel Closed By Server")
-                                }else
-                                    it.data?.fromJsonString(inType)
-                            else null
-                        },
-                        send = { message: OUT ->
-                            println("Sending $message to $it")
-                            it.write.onNext(
+                .mapNotNull { message ->
+                    when {
+                        message.start -> {
+//                            println("Channel ${message.channel} established with $sharedSocket")
+                            WebSocketIsh<IN, OUT>(
+                                messages = current,
+                                send = { message ->
+//                                    println("Sending $message to $channel")
+                                    sharedSocket.write.onNext(
+                                        WebSocketFrame(
+                                            text = MultiplexMessage(
+                                                channel = channel,
+                                                data = message.toJsonString(outType)
+                                            ).toJsonString()
+                                        )
+                                    )
+                                }
+                            )
+                        }
+
+                        message.data != null -> {
+//                            println("Got ${message.data} to ${message.channel}")
+                            current.onNext(message.data?.fromJsonString(inType))
+                            null
+                        }
+
+                        message.end -> {
+//                            println("Channel ${message.channel} terminated")
+                            current = PublishSubject.create()
+                            sharedSocket.write.onNext(
                                 WebSocketFrame(
                                     text = MultiplexMessage(
                                         channel = channel,
-                                        data = message.toJsonString(outType)
+                                        path = path,
+                                        start = true
                                     ).toJsonString()
                                 )
                             )
+                            null
                         }
-                    )
-                }
-                .retryWhen @SwiftReturnType("Observable<Error>") {
-                    val temp = retryTime
-                    retryTime = temp * 2L
-                    it.delay(temp, TimeUnit.MILLISECONDS, HttpClient.responseScheduler!!)
+
+                        else -> null
+                    }
                 }
                 .doOnSubscribe { _ ->
-                    it.write.onNext(
+//                    println("Sending onSubscribe Startup Message")
+                    sharedSocket.write.onNext(
                         WebSocketFrame(
                             text = MultiplexMessage(
                                 channel = channel,
@@ -149,18 +161,22 @@ fun <IN : IsCodableAndHashableNotNull, OUT : IsCodableAndHashable> multiplexedSo
                         )
                     )
                 }
-
-        }
-        .doOnDispose {
-//            println("Disconnecting channel on socket to $shortUrl with $path")
-            lastSocket?.write?.onNext(
-                WebSocketFrame(
-                    text = MultiplexMessage(
-                        channel = channel,
-                        path = path,
-                        end = true
-                    ).toJsonString()
-                )
-            )
+                .doOnDispose {
+//                    println("Disconnecting channel on socket to $shortUrl with $path")
+                    sharedSocket.write.onNext(
+                        WebSocketFrame(
+                            text = MultiplexMessage(
+                                channel = channel,
+                                path = path,
+                                end = true
+                            ).toJsonString()
+                        )
+                    )
+                }
+                .retryWhen @SwiftReturnType("Observable<Error>") {
+                    val temp = retryTime
+                    retryTime = temp * 2L
+                    it.delay(temp, TimeUnit.MILLISECONDS, HttpClient.responseScheduler!!)
+                }
         }
 }

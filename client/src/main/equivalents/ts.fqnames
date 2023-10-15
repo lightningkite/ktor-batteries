@@ -95,6 +95,7 @@ com.lightningkite.ktordb.anyClear>com.lightningkite.ktordb.PropChaincom.lightnin
 com.lightningkite.ktordb.CollectionChanges
 com.lightningkite.ktordb.aggregator>com.lightningkite.ktordb.Aggregate
 com.lightningkite.ktordb.live.LiveReadModelApi
+com.lightningkite.ktordb.live.filter
 com.lightningkite.ktordb.ListChange
 com.lightningkite.ktordb.notIn>com.lightningkite.ktordb.PropChaincom.lightningkite.ktordb.notIn.K, com.lightningkite.ktordb.notIn.T
 com.lightningkite.ktordb.UUIDFor
